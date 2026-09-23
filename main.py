@@ -173,12 +173,12 @@ def main() -> None:
     application = Application.builder().token(TOKEN).build()
 
     application.add_handler(CommandHandler("start", start))
-    application.add_handler(MessageHandler((filters.TEXT & ~filters.COMMAND) | filters.VIDEO | filters.DOCUMENT, handle_message))
+    # تم تصحيح الفلتر هنا ليعمل بدون أخطاء مع الإصدار الحديث
+    application.add_handler(MessageHandler((filters.TEXT & ~filters.COMMAND) | filters.VIDEO | filters.Document.ALL, handle_message))
     application.add_handler(CallbackQueryHandler(button_callback))
 
     application.run_polling()
 
 if __name__ == "__main__":
     main()
-            
-
+        
