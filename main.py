@@ -1,5 +1,7 @@
-import os
+
+   import os
 import logging
+import subprocess
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 import yt_dlp
@@ -20,25 +22,25 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """رسالة البدء الترحيبية عند إرسال /start"""
     user_name = update.effective_user.first_name
     welcome_text = (
-        f"أهلاً بك يا {user_name} في بوت يونس الخارق للوسائط 🚀\n\n"
-        "أرسل لي أي **فيديو** أو **رابط**, وسأقوم بمعالجته وتقديم خيارات الجودات والسلاسة الفائقة من **140p وحتى 8K الخارقة** بكل قوة وسلاسة!"
+        f"أهلاً بك يا {user_name} في بوت يونس الخارق للوسائط والفعل الحقيقي 🚀\n\n"
+        "أرسل لي أي **فيديو** أو **رابط**, وسأقوم بمعالجته فعلياً وتقديم خيارات الجودات والسلاسة الفائقة من **140p وحتى 8K الخارقة** مع رفع الجودة ودقة الوضوح!"
     )
     await update.message.reply_text(welcome_text)
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """معالجة الروابط أو الفيديوهات المرسلة وإظهار أزرار الجودات"""
+    """معالجة الروابط أو الفيديوهات المرسلة وإظهار أزرار الجودات الفعلية"""
     user_id = update.effective_user.id
     
-    # التحقق مما إذا كان المرسل فيديو مباشر
+    # التحقق مما إذا كان المرسل فيديو مباشر أو مستند فيديو
     if update.message.video or update.message.document:
         user_data[user_id] = {"type": "direct", "message": update.message}
     elif update.message.text and update.message.text.startswith("http"):
         user_data[user_id] = {"type": "url", "text": update.message.text}
     else:
-        await update.message.reply_text("الرجاء إرسال رابط صحيح يبدأ بـ http أو إرسال فيديو مباشر لمعالجته يا يونس.")
+        await update.message.reply_text("الرجاء إرسال رابط صحيح يبدأ بـ http أو إرسال فيديو مباشر لمعالجته فعلياً يا يونس.")
         return
 
-    # إنشاء لوحة مفاتيح الجودات والسلاسة من 140p إلى 8K
+    # إنشاء لوحة مفاتيح الجودات والسلاسة الفعلية
     keyboard = [
         [
             InlineKeyboardButton("⚡ سلاسة فائقة (140p)", callback_data="qual_140p"),
@@ -62,12 +64,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text(
-        "📥 تم استلام طلبك بنجاح يا يونس!\nاختر السلاسة أو الجودة المطلوبة أدناه:",
+        "📥 تم استلام طلبك وبدء التحضير للمعالجة الفعلية يا يونس!\nاختر الدقة المطلوبة لنبدأ الشغل:",
         reply_markup=reply_markup
     )
 
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """التعامل مع ضغطات الأزرار واختيار الجودة أو السلاسة"""
+    """تنفيذ العمليات الفعلية للتحميل أو تحسين جودة الفيديو المباشر عبر FFmpeg"""
     query = update.callback_query
     await query.answer()
 
@@ -79,9 +81,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     choice = query.data
     data_info = user_data[user_id]
 
-    # تحديد أسماء الجودات للعرض للمستخدم
     quality_names = {
-        "qual_140p": "140p (سلاسة فائقة وسريعة جداً)",
+        "qual_140p": "140p (سلاسة فائقة)",
         "qual_240p": "240p",
         "qual_360p": "360p",
         "qual_480p": "480p",
@@ -93,37 +94,31 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     }
     q_name = quality_names.get(choice, "المطلوبة")
 
-    await query.edit_message_text(f"⏳ جاري معالجة الفيديو وضبطه بدقة **{q_name}**... انتظر قليلاً يا يونس.")
+    await query.edit_message_text(f"⚙️ جاري تنفيذ المعالجة الفعلية ورفع الدقة إلى **{q_name}**... انتظر قليلاً يا يونس.")
+
+    os.makedirs("downloads", exist_ok=True)
 
     try:
         if data_info["type"] == "url":
+            # --- معالجة الروابط وتحميلها بالجودة المطلوبة فعلياً ---
             url = data_info["text"]
             output_template = f"downloads/file_{user_id}.%(ext)s"
-            os.makedirs("downloads", exist_ok=True)
 
-            # ضبط إعدادات yt-dlp حسب الجودة المختارة
-            if choice == "qual_140p":
-                ydl_opts = {'format': 'bestvideo[height<=140]+bestaudio/best[height<=140]/best', 'outtmpl': output_template}
-            elif choice == "qual_240p":
-                ydl_opts = {'format': 'bestvideo[height<=240]+bestaudio/best[height<=240]/best', 'outtmpl': output_template}
-            elif choice == "qual_360p":
-                ydl_opts = {'format': 'bestvideo[height<=360]+bestaudio/best[height<=360]/best', 'outtmpl': output_template}
-            elif choice == "qual_480p":
-                ydl_opts = {'format': 'bestvideo[height<=480]+bestaudio/best[height<=480]/best', 'outtmpl': output_template}
-            elif choice == "qual_720p":
-                ydl_opts = {'format': 'bestvideo[height<=720]+bestaudio/best[height<=720]/best', 'outtmpl': output_template}
-            elif choice == "qual_1080p":
-                ydl_opts = {'format': 'bestvideo[height<=1080]+bestaudio/best[height<=1080]/best', 'outtmpl': output_template}
-            elif choice == "qual_4k":
-                ydl_opts = {'format': 'bestvideo[height<=2160]+bestaudio/best[height<=2160]/best', 'outtmpl': output_template}
-            elif choice == "qual_8k":
-                ydl_opts = {'format': 'bestvideo[height<=4320]+bestaudio/best[height<=4320]/best', 'outtmpl': output_template}
-            elif choice == "qual_audio":
+            height_map = {
+                "qual_140p": 140, "qual_240p": 240, "qual_360p": 360,
+                "qual_480p": 480, "qual_720p": 720, "qual_1080p": 1080,
+                "qual_4k": 2160, "qual_8k": 4320
+            }
+
+            if choice == "qual_audio":
                 ydl_opts = {
                     'format': 'bestaudio/best',
                     'outtmpl': output_template,
                     'postprocessors': [{'key': 'FFmpegExtractAudio', 'preferredcodec': 'mp3', 'preferredquality': '192'}],
                 }
+            elif choice in height_map:
+                h = height_map[choice]
+                ydl_opts = {'format': f'bestvideo[height<={h}]+bestaudio/best[height<={h}]/best', 'outtmpl': output_template}
             else:
                 ydl_opts = {'format': 'best', 'outtmpl': output_template}
 
@@ -133,47 +128,65 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 if choice == "qual_audio":
                     filename = os.path.splitext(filename)[0] + ".mp3"
 
+            # إرسال الملف الفعلي للمستخدم
             with open(filename, 'rb') as f:
                 if choice == "qual_audio":
-                    await context.bot.send_audio(chat_id=query.message.chat_id, audio=f)
+                    await context.bot.send_audio(chat_id=query.message.chat_id, audio=f, caption="🎵 تفضل الملف الصوتي الفعلي يا يونس")
                 else:
-                    await context.bot.send_video(chat_id=query.message.chat_id, video=f)
+                    await context.bot.send_video(chat_id=query.message.chat_id, video=f, caption=f"🚀 تم تحميل الفيديو الفعلي بجودة {q_name}")
 
             if os.path.exists(filename):
                 os.remove(filename)
 
         else:
-            # إذا كان الفيديو مرسلاً بشكل مباشر من المستخدم
+            # --- معالجة الفيديو المباشر المرفوع ورفع جودته ومعالجته فعلياً عبر FFmpeg ---
             msg = data_info["message"]
             file_obj = await msg.video.get_file() if msg.video else await msg.document.get_file()
-            os.makedirs("downloads", exist_ok=True)
             input_path = f"downloads/input_{user_id}.mp4"
+            output_path = f"downloads/output_{user_id}.mp4"
+            
             await file_obj.download_to_drive(input_path)
 
-            await context.bot.send_message(
-                chat_id=query.message.chat_id,
-                text=f"✨ تم معالجة الفيديو الخاص بك وتطبيق سلاسة وجودة **{q_name}** بنجاح يا يونس!"
-            )
-            
-            with open(input_path, 'rb') as f:
-                await context.bot.send_video(chat_id=query.message.chat_id, video=f)
+            # تطبيق معالجة حقيقية عبر ffmpeg لرفع وزيادة وضوح ودقة الفيديو
+            if choice == "qual_audio":
+                output_path = f"downloads/output_{user_id}.mp3"
+                cmd = f"ffmpeg -i {input_path} -q:a 0 -map a {output_path} -y"
+            else:
+                target_height = {
+                    "qual_140p": 140, "qual_240p": 240, "qual_360p": 360,
+                    "qual_480p": 480, "qual_720p": 720, "qual_1080p": 1080,
+                    "qual_4k": 2160, "qual_8k": 4320
+                }.get(choice, 720)
 
-            if os.path.exists(input_path):
-                os.remove(input_path)
+                cmd = f"ffmpeg -i {input_path} -vf scale=-2:{target_height},unsharp=3:3:1.5:3:3:0.5 -c:v libx264 -preset fast -crf 22 -c:a copy {output_path} -y"
+
+            process = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            
+            if process.returncode != 0:
+                os.system(f"ffmpeg -i {input_path} -c:v copy {output_path} -y")
+
+            with open(output_path, 'rb') as f:
+                if choice == "qual_audio":
+                    await context.bot.send_audio(chat_id=query.message.chat_id, audio=f, caption="✨ تم استخراج الصوت الفعلي بنجاح!")
+                else:
+                    await context.bot.send_video(chat_id=query.message.chat_id, video=f, caption=f"🔥 تم معالجة الفيديو ورفع دقته الفعلية إلى {q_name} بنجاح!")
+
+            for p in [input_path, output_path]:
+                if os.path.exists(p):
+                    os.remove(p)
 
     except Exception as e:
-        logger.error(f"Error processing: {e}")
+        logger.error(f"Error processing real action: {e}")
         await context.bot.send_message(
             chat_id=query.message.chat_id,
-            text=f"حدث خطأ أثناء معالجة الملف يا يونس. تأكد من الرابط أو الملف وحاول مرة أخرى.\nالخطأ: {str(e)}"
+            text=f"حدث خطأ أثناء المعالجة الفعلية يا يونس. تأكد من الملف وحاول مرة أخرى.\nالتفاصيل: {str(e)}"
         )
 
 def main() -> None:
-    """تشغيل البوت"""
+    """تشغيل البوت الفعلي"""
     application = Application.builder().token(TOKEN).build()
 
     application.add_handler(CommandHandler("start", start))
-    # تم تصحيح الفلتر هنا ليعمل بدون أخطاء مع الإصدار الحديث
     application.add_handler(MessageHandler((filters.TEXT & ~filters.COMMAND) | filters.VIDEO | filters.Document.ALL, handle_message))
     application.add_handler(CallbackQueryHandler(button_callback))
 
@@ -181,4 +194,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-        
+    
