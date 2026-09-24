@@ -6,7 +6,6 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 import yt_dlp
 
-# إعدادات التسجيل
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
@@ -27,43 +26,43 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     user_id = update.effective_user.id
     message = update.message
     
-    try:
-        if message.photo:
-            photo_file = await message.photo[-1].get_file()
-            user_data[user_id] = {"type": "photo", "file": photo_file}
-        elif message.document and any(ext in message.document.file_name.lower() for ext in ['.jpg', '.jpeg', '.png', '.webp']):
+    if message.photo:
+        photo_file = await message.photo[-1].get_file()
+        user_data[user_id] = {"type": "photo", "file": photo_file}
+    elif message.video:
+        user_data[user_id] = {"type": "video", "message": message}
+    elif message.document:
+        # التحقق إذا كان المستند صورة أو فيديو
+        file_name = message.document.file_name.lower() if message.document.file_name else ""
+        if any(ext in file_name for ext in ['.jpg', '.jpeg', '.png', '.webp']):
             photo_file = await message.document.get_file()
             user_data[user_id] = {"type": "photo", "file": photo_file}
-        elif message.video or message.document or message.animation:
-            user_data[user_id] = {"type": "video", "message": message}
-        elif message.text and message.text.startswith("http"):
-            user_data[user_id] = {"type": "url", "text": message.text}
         else:
-            await message.reply_text("يا يونس يا بطل، أرسل لي **صورة** أو **فيديو** واضح لنبدأ المعالجة! 📥")
-            return
+            user_data[user_id] = {"type": "video", "message": message}
+    elif message.text and message.text.startswith("http"):
+        user_data[user_id] = {"type": "url", "text": message.text}
+    else:
+        await message.reply_text("يا يونس يا بطل، أرسل لي **صورة** أو **فيديو** واضح لنبدأ المعالجة! 📥")
+        return
 
-        keyboard = [
-            [
-                InlineKeyboardButton("✨ تصفية ورفع الجودة HD", callback_data="qual_hd"),
-                InlineKeyboardButton("🔥 رفع الجودة لـ 4K", callback_data="qual_4k")
-            ],
-            [
-                InlineKeyboardButton("🚀 تفعيل جودة 8K الخارقة + فلاتر النشر", callback_data="qual_8k"),
-                InlineKeyboardButton("💎 فلتر السينما الفاخر", callback_data="qual_cinema")
-            ],
-            [
-                InlineKeyboardButton("🎵 تحويل الفيديو لصوت MP3", callback_data="qual_audio")
-            ]
+    keyboard = [
+        [
+            InlineKeyboardButton("✨ تصفية ورفع الجودة HD", callback_data="qual_hd"),
+            InlineKeyboardButton("🔥 رفع الجودة لـ 4K", callback_data="qual_4k")
+        ],
+        [
+            InlineKeyboardButton("🚀 تفعيل جودة 8K الخارقة + فلاتر النشر", callback_data="qual_8k"),
+            InlineKeyboardButton("💎 فلتر السينما الفاخر", callback_data="qual_cinema")
+        ],
+        [
+            InlineKeyboardButton("🎵 تحويل الفيديو لصوت MP3", callback_data="qual_audio")
         ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        await message.reply_text(
-            "📥 تم استلام الملف بنجاح يا يونس!\nاختر نوع المعالجة والفلتر المطلوب:",
-            reply_markup=reply_markup
-        .upper()
-        )
-    except Exception as e:
-        logger.error(f"Error in handle_message: {e}")
-        await message.reply_text("حدث خطأ بسيط في استقبال الملف، حاول مرة أخرى يا يونس.")
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await message.reply_text(
+        "📥 تم استلام الملف بنجاح يا يونس!\nاختر نوع المعالجة والفلتر المطلوب:",
+        reply_markup=reply_markup
+    )
 
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
@@ -95,7 +94,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
             h, w = img.shape[:2]
 
-            # تصغير حجم التكبير قليلاً لمنع الانهيار وضمان السرعة والوضوح
             if choice == "qual_8k":
                 scale = 2.5
                 img = cv2.detailEnhance(img, sigma_s=8, sigma_r=0.15)
@@ -129,36 +127,10 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 if os.path.exists(p):
                     os.remove(p)
 
-        elif data_info["type"] == "url":
-            url = data_info["text"]
-            output_template = f"downloads/file_{user_id}.%(ext)s"
-            ydl_opts = {'format': 'best', 'outtmpl': output_template}
-
-            if choice == "qual_audio":
-                ydl_opts = {
-                    'format': 'bestaudio/best',
-                    'outtmpl': output_template,
-                    'postprocessors': [{'key': 'FFmpegExtractAudio', 'preferredcodec': 'mp3', 'preferredquality': '192'}],
-                }
-
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(url, download=True)
-                filename = ydl.prepare_filename(info)
-                if choice == "qual_audio":
-                    filename = os.path.splitext(filename)[0] + ".mp3"
-
-            with open(filename, 'rb') as f:
-                if choice == "qual_audio":
-                    await context.bot.send_audio(chat_id=query.message.chat_id, audio=f, caption="🎵 تفضل الملف الصوتي يا يونس")
-                else:
-                    await context.bot.send_video(chat_id=query.message.chat_id, video=f, caption="🚀 تم تحميل ومعالجة الفيديو بجودة عالية")
-
-            if os.path.exists(filename):
-                os.remove(filename)
-
         else:
+            # معالجة الفيديوهات
             msg = data_info["message"]
-            media_file = msg.video or msg.document or msg.animation
+            media_file = msg.video or msg.document
             file_obj = await media_file.get_file()
             
             input_path = f"downloads/input_{user_id}.mp4"
@@ -210,17 +182,17 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     os.remove(p)
 
     except Exception as e:
-        logger.error(f"Error in processing callback: {e}")
+        logger.error(f"Error in processing: {e}")
         await context.bot.send_message(
             chat_id=query.message.chat_id,
-            text=f"عذراً يا يونس، حصل ضغط في السيرفر وتم تجاوز المشكلة. حاول إرسال الصورة مرة أخرى."
+            text=f"عذراً يا يونس، حصل خطأ أثناء المعالجة: {str(e)}"
         )
 
 def main() -> None:
     application = Application.builder().token(TOKEN).build()
     application.add_handler(CommandHandler("start", start))
     
-    msg_filter = filters.PHOTO | filters.VIDEO | filters.Document.ALL | filters.ANIMATION | (filters.TEXT & ~filters.COMMAND)
+    msg_filter = filters.PHOTO | filters.VIDEO | filters.Document.ALL | (filters.TEXT & ~filters.COMMAND)
     application.add_handler(MessageHandler(msg_filter, handle_message))
     
     application.add_handler(CallbackQueryHandler(button_callback))
