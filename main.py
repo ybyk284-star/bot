@@ -1,7 +1,7 @@
-
-   import os
+import os
 import logging
-import subprocess
+import cv2
+import numpy as np
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 import yt_dlp
@@ -15,32 +15,30 @@ logger = logging.getLogger(__name__)
 # توكن البوت
 TOKEN = '8266423475:AAFUyf5Ee6eWIPY2pWErii3HUm0M9JfDY6k'
 
-# تخزين مؤقت لروابط ومقاطع المستخدمين
+# تخزين مؤقت لبيانات المستخدمين
 user_data = {}
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """رسالة البدء الترحيبية عند إرسال /start"""
+    """رسالة البدء الترحيبية"""
     user_name = update.effective_user.first_name
     welcome_text = (
-        f"أهلاً بك يا {user_name} في بوت يونس الخارق للوسائط والفعل الحقيقي 🚀\n\n"
-        "أرسل لي أي **فيديو** أو **رابط**, وسأقوم بمعالجته فعلياً وتقديم خيارات الجودات والسلاسة الفائقة من **140p وحتى 8K الخارقة** مع رفع الجودة ودقة الوضوح!"
+        f"أهلاً بك يا {user_name} في بوت يونس الخارق للمعالجة الفعلية 🚀\n\n"
+        "أرسل لي أي **فيديو** أو **رابط**, وسأقوم بمعالجته وتغيير دقته ورفع جودته فعلياً عبر خوارزميات المعالجة الذكية!"
     )
     await update.message.reply_text(welcome_text)
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """معالجة الروابط أو الفيديوهات المرسلة وإظهار أزرار الجودات الفعلية"""
+    """استقبال الروابط أو الفيديوهات وإظهار أزرار الجودات"""
     user_id = update.effective_user.id
     
-    # التحقق مما إذا كان المرسل فيديو مباشر أو مستند فيديو
     if update.message.video or update.message.document:
         user_data[user_id] = {"type": "direct", "message": update.message}
     elif update.message.text and update.message.text.startswith("http"):
         user_data[user_id] = {"type": "url", "text": update.message.text}
     else:
-        await update.message.reply_text("الرجاء إرسال رابط صحيح يبدأ بـ http أو إرسال فيديو مباشر لمعالجته فعلياً يا يونس.")
+        await update.message.reply_text("الرجاء إرسال رابط صحيح يبدأ بـ http أو إرسال فيديو مباشر لمعالجته يا يونس.")
         return
 
-    # إنشاء لوحة مفاتيح الجودات والسلاسة الفعلية
     keyboard = [
         [
             InlineKeyboardButton("⚡ سلاسة فائقة (140p)", callback_data="qual_140p"),
@@ -64,46 +62,40 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text(
-        "📥 تم استلام طلبك وبدء التحضير للمعالجة الفعلية يا يونس!\nاختر الدقة المطلوبة لنبدأ الشغل:",
+        "📥 تم استلام طلبك وجاهز لبدء المعالجة الفعلية يا يونس!\nاختر الجودة المطلوبة:",
         reply_markup=reply_markup
     )
 
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """تنفيذ العمليات الفعلية للتحميل أو تحسين جودة الفيديو المباشر عبر FFmpeg"""
+    """معالجة الفيديو فعلياً عبر OpenCV وتغيير داقته وأبعاده"""
     query = update.callback_query
     await query.answer()
 
     user_id = query.from_user.id
     if user_id not in user_data:
-        await query.edit_message_text("انتهت صلاحية الجلسة أو حدث خطأ. أرسل الرابط أو الفيديو من جديد.")
+        await query.edit_message_text("انتهت صلاحية الجلسة. أرسل الرابط أو الفيديو من جديد.")
         return
 
     choice = query.data
     data_info = user_data[user_id]
 
     quality_names = {
-        "qual_140p": "140p (سلاسة فائقة)",
-        "qual_240p": "240p",
-        "qual_360p": "360p",
-        "qual_480p": "480p",
-        "qual_720p": "720p HD",
-        "qual_1080p": "1080p FHD",
-        "qual_4k": "4K ULTRA",
-        "qual_8k": "8K EXTREME الخارقة",
+        "qual_140p": "140p", "qual_240p": "240p", "qual_360p": "360p",
+        "qual_480p": "480p", "qual_720p": "720p HD", "qual_1080p": "1080p FHD",
+        "qual_4k": "4K ULTRA", "qual_8k": "8K EXTREME الخارقة",
         "qual_audio": "صوت MP3"
     }
     q_name = quality_names.get(choice, "المطلوبة")
 
-    await query.edit_message_text(f"⚙️ جاري تنفيذ المعالجة الفعلية ورفع الدقة إلى **{q_name}**... انتظر قليلاً يا يونس.")
+    await query.edit_message_text(f"⚙️ جاري تطبيق المعالجة الفعلية ورفع الوضوح إلى **{q_name}**... انتظر قليلاً يا يونس.")
 
     os.makedirs("downloads", exist_ok=True)
 
     try:
         if data_info["type"] == "url":
-            # --- معالجة الروابط وتحميلها بالجودة المطلوبة فعلياً ---
             url = data_info["text"]
             output_template = f"downloads/file_{user_id}.%(ext)s"
-
+            
             height_map = {
                 "qual_140p": 140, "qual_240p": 240, "qual_360p": 360,
                 "qual_480p": 480, "qual_720p": 720, "qual_1080p": 1080,
@@ -116,11 +108,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     'outtmpl': output_template,
                     'postprocessors': [{'key': 'FFmpegExtractAudio', 'preferredcodec': 'mp3', 'preferredquality': '192'}],
                 }
-            elif choice in height_map:
-                h = height_map[choice]
-                ydl_opts = {'format': f'bestvideo[height<={h}]+bestaudio/best[height<={h}]/best', 'outtmpl': output_template}
             else:
-                ydl_opts = {'format': 'best', 'outtmpl': output_template}
+                h = height_map.get(choice, 720)
+                ydl_opts = {'format': f'bestvideo[height<={h}]+bestaudio/best[height<={h}]/best', 'outtmpl': output_template}
 
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=True)
@@ -128,7 +118,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 if choice == "qual_audio":
                     filename = os.path.splitext(filename)[0] + ".mp3"
 
-            # إرسال الملف الفعلي للمستخدم
             with open(filename, 'rb') as f:
                 if choice == "qual_audio":
                     await context.bot.send_audio(chat_id=query.message.chat_id, audio=f, caption="🎵 تفضل الملف الصوتي الفعلي يا يونس")
@@ -139,7 +128,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 os.remove(filename)
 
         else:
-            # --- معالجة الفيديو المباشر المرفوع ورفع جودته ومعالجته فعلياً عبر FFmpeg ---
+            # معالجة الفيديو المباشر عبر مكتبة OpenCV وتعديل أبعاده ووضوحه فعلياً
             msg = data_info["message"]
             file_obj = await msg.video.get_file() if msg.video else await msg.document.get_file()
             input_path = f"downloads/input_{user_id}.mp4"
@@ -147,51 +136,76 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             
             await file_obj.download_to_drive(input_path)
 
-            # تطبيق معالجة حقيقية عبر ffmpeg لرفع وزيادة وضوح ودقة الفيديو
             if choice == "qual_audio":
+                # استخراج الصوت كملف
                 output_path = f"downloads/output_{user_id}.mp3"
-                cmd = f"ffmpeg -i {input_path} -q:a 0 -map a {output_path} -y"
+                import subprocess
+                subprocess.run(f"ffmpeg -i {input_path} -q:a 0 -map a {output_path} -y", shell=True)
+                with open(output_path, 'rb') as f:
+                    await context.bot.send_audio(chat_id=query.message.chat_id, audio=f, caption="✨ تم استخراج الصوت الفعلي بنجاح!")
             else:
+                # تحديد الأبعاد الجديدة بدقة
                 target_height = {
                     "qual_140p": 140, "qual_240p": 240, "qual_360p": 360,
                     "qual_480p": 480, "qual_720p": 720, "qual_1080p": 1080,
                     "qual_4k": 2160, "qual_8k": 4320
                 }.get(choice, 720)
 
-                cmd = f"ffmpeg -i {input_path} -vf scale=-2:{target_height},unsharp=3:3:1.5:3:3:0.5 -c:v libx264 -preset fast -crf 22 -c:a copy {output_path} -y"
+                # قراءة الفيديو ومعالجته إطاراً بإطار عبر OpenCV
+                cap = cv2.VideoCapture(input_path)
+                fps = cap.get(cv2.CAP_PROP_FPS)
+                if fps == 0 or np.isnan(fps):
+                    fps = 25.0
 
-            process = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            
-            if process.returncode != 0:
-                os.system(f"ffmpeg -i {input_path} -c:v copy {output_path} -y")
+                width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                
+                # حساب العرض الجديد بناءً على الارتفاع المطلوب للحفاظ على التناسق
+                aspect_ratio = width / height if height > 0 else 16/9
+                new_height = target_height
+                new_width = int(new_height * aspect_ratio)
+                if new_width % 2 != 0:
+                    new_width += 1
 
-            with open(output_path, 'rb') as f:
-                if choice == "qual_audio":
-                    await context.bot.send_audio(chat_id=query.message.chat_id, audio=f, caption="✨ تم استخراج الصوت الفعلي بنجاح!")
-                else:
-                    await context.bot.send_video(chat_id=query.message.chat_id, video=f, caption=f"🔥 تم معالجة الفيديو ورفع دقته الفعلية إلى {q_name} بنجاح!")
+                fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+                out = cv2.VideoWriter(output_path, fourcc, fps, (new_width, new_height))
 
+                while cap.isOpened():
+                    ret, frame = cap.read()
+                    if not ret:
+                        break
+                    # تغيير الحجم الفعلي وتطبيق فلتر زيادة الحدة (Upscaling & Sharpening Simulation)
+                    resized = cv2.resize(frame, (new_width, new_height), interpolation=cv2.INTER_CUBIC)
+                    # تطبيق فلتر لمعالجة وتوضيح المعالم
+                    gaussian = cv2.GaussianBlur(resized, (0, 0), 2.0)
+                    enhanced = cv2.addWeighted(resized, 1.5, gaussian, -0.5, 0)
+                    out.write(enhanced)
+
+                cap.release()
+                out.release()
+
+                with open(output_path, 'rb') as f:
+                    await context.bot.send_video(chat_id=query.message.chat_id, video=f, caption=f"🔥 تمت المعالجة الفعلية وتعديل الدقة إلى {q_name} بنجاح يا يونس!")
+
+            # تنظيف الملفات
             for p in [input_path, output_path]:
                 if os.path.exists(p):
                     os.remove(p)
 
     except Exception as e:
-        logger.error(f"Error processing real action: {e}")
+        logger.error(f"Error in OpenCV processing: {e}")
         await context.bot.send_message(
             chat_id=query.message.chat_id,
-            text=f"حدث خطأ أثناء المعالجة الفعلية يا يونس. تأكد من الملف وحاول مرة أخرى.\nالتفاصيل: {str(e)}"
+            text=f"حدث خطأ أثناء المعالجة الفعلية يا يونس: {str(e)}"
         )
 
 def main() -> None:
-    """تشغيل البوت الفعلي"""
     application = Application.builder().token(TOKEN).build()
-
     application.add_handler(CommandHandler("start", start))
     application.add_handler(MessageHandler((filters.TEXT & ~filters.COMMAND) | filters.VIDEO | filters.Document.ALL, handle_message))
     application.add_handler(CallbackQueryHandler(button_callback))
-
     application.run_polling()
 
 if __name__ == "__main__":
     main()
-    
+   
