@@ -23,20 +23,22 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_name = update.effective_user.first_name
     welcome_text = (
         f"أهلاً بك يا {user_name} في بوت يونس الخارق للمعالجة الفعلية 🚀\n\n"
-        "أرسل لي أي **فيديو** أو **رابط**, وسأقوم بمعالجته وتغيير دقته ورفع جودته فعلياً عبر خوارزميات المعالجة الذكية!"
+        "أرسل لي أي **فيديو** أو **رابط**, وسأقوم بمعالجته وتغيير دقته ورفع جودته فوراً!"
     )
     await update.message.reply_text(welcome_text)
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """استقبال الروابط أو الفيديوهات وإظهار أزرار الجودات"""
+    """استقبال الروابط أو الفيديوهات وإظهار أزرار الجودات بدقة عالية"""
     user_id = update.effective_user.id
+    message = update.message
     
-    if update.message.video or update.message.document:
-        user_data[user_id] = {"type": "direct", "message": update.message}
-    elif update.message.text and update.message.text.startswith("http"):
-        user_data[user_id] = {"type": "url", "text": update.message.text}
+    # التحقق مما إذا كان المرسل فيديو، مستند فيديو، أو رابط نصي
+    if message.video or message.document or message.animation:
+        user_data[user_id] = {"type": "direct", "message": message}
+    elif message.text and message.text.startswith("http"):
+        user_data[user_id] = {"type": "url", "text": message.text}
     else:
-        await update.message.reply_text("الرجاء إرسال رابط صحيح يبدأ بـ http أو إرسال فيديو مباشر لمعالجته يا يونس.")
+        await message.reply_text("يا يونس يا بطل، أرسل لي **فيديو** أو **رابط** صحيح عشان أقدر أعالج لك إياه! 📥")
         return
 
     keyboard = [
@@ -61,19 +63,19 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         ]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text(
-        "📥 تم استلام طلبك وجاهز لبدء المعالجة الفعلية يا يونس!\nاختر الجودة المطلوبة:",
+    await message.reply_text(
+        "📥 تم استلام الفيديو بنجاح يا يونس!\nاختر الجودة المطلوبة لبدء المعالجة الفورية:",
         reply_markup=reply_markup
     )
 
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """معالجة الفيديو فعلياً عبر OpenCV وتغيير داقته وأبعاده"""
+    """معالجة الفيديو فعلياً وتغيير داقته وأبعاده"""
     query = update.callback_query
     await query.answer()
 
     user_id = query.from_user.id
     if user_id not in user_data:
-        await query.edit_message_text("انتهت صلاحية الجلسة. أرسل الرابط أو الفيديو من جديد.")
+        await query.edit_message_text("انتهت صلاحية الجلسة يا يونس. أرسل الفيديو أو الرابط من جديد.")
         return
 
     choice = query.data
@@ -87,7 +89,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     }
     q_name = quality_names.get(choice, "المطلوبة")
 
-    await query.edit_message_text(f"⚙️ جاري تطبيق المعالجة الفعلية ورفع الوضوح إلى **{q_name}**... انتظر قليلاً يا يونس.")
+    await query.edit_message_text(f"⚙️ جاري تطبيق المعالجة ورفع الوضوح إلى **{q_name}**... انتظر قليلاً يا يونس.")
 
     os.makedirs("downloads", exist_ok=True)
 
@@ -120,38 +122,37 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
             with open(filename, 'rb') as f:
                 if choice == "qual_audio":
-                    await context.bot.send_audio(chat_id=query.message.chat_id, audio=f, caption="🎵 تفضل الملف الصوتي الفعلي يا يونس")
+                    await context.bot.send_audio(chat_id=query.message.chat_id, audio=f, caption="🎵 تفضل الملف الصوتي يا يونس")
                 else:
-                    await context.bot.send_video(chat_id=query.message.chat_id, video=f, caption=f"🚀 تم تحميل الفيديو الفعلي بجودة {q_name}")
+                    await context.bot.send_video(chat_id=query.message.chat_id, video=f, caption=f"🚀 تم تحميل ومعالجة الفيديو بجودة {q_name}")
 
             if os.path.exists(filename):
                 os.remove(filename)
 
         else:
-            # معالجة الفيديو المباشر عبر مكتبة OpenCV وتعديل أبعاده ووضوحه فعلياً
+            # معالجة الفيديو المباشر عبر OpenCV
             msg = data_info["message"]
-            file_obj = await msg.video.get_file() if msg.video else await msg.document.get_file()
+            media_file = msg.video or msg.document or msg.animation
+            file_obj = await media_file.get_file()
+            
             input_path = f"downloads/input_{user_id}.mp4"
             output_path = f"downloads/output_{user_id}.mp4"
             
             await file_obj.download_to_drive(input_path)
 
             if choice == "qual_audio":
-                # استخراج الصوت كملف
                 output_path = f"downloads/output_{user_id}.mp3"
                 import subprocess
                 subprocess.run(f"ffmpeg -i {input_path} -q:a 0 -map a {output_path} -y", shell=True)
                 with open(output_path, 'rb') as f:
-                    await context.bot.send_audio(chat_id=query.message.chat_id, audio=f, caption="✨ تم استخراج الصوت الفعلي بنجاح!")
+                    await context.bot.send_audio(chat_id=query.message.chat_id, audio=f, caption="✨ تم استخراج الصوت بنجاح يا يونس!")
             else:
-                # تحديد الأبعاد الجديدة بدقة
                 target_height = {
                     "qual_140p": 140, "qual_240p": 240, "qual_360p": 360,
                     "qual_480p": 480, "qual_720p": 720, "qual_1080p": 1080,
                     "qual_4k": 2160, "qual_8k": 4320
                 }.get(choice, 720)
 
-                # قراءة الفيديو ومعالجته إطاراً بإطار عبر OpenCV
                 cap = cv2.VideoCapture(input_path)
                 fps = cap.get(cv2.CAP_PROP_FPS)
                 if fps == 0 or np.isnan(fps):
@@ -160,7 +161,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
                 height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
                 
-                # حساب العرض الجديد بناءً على الارتفاع المطلوب للحفاظ على التناسق
+                if width == 0 or height == 0:
+                    width, height = 640, 360
+
                 aspect_ratio = width / height if height > 0 else 16/9
                 new_height = target_height
                 new_width = int(new_height * aspect_ratio)
@@ -174,9 +177,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     ret, frame = cap.read()
                     if not ret:
                         break
-                    # تغيير الحجم الفعلي وتطبيق فلتر زيادة الحدة (Upscaling & Sharpening Simulation)
                     resized = cv2.resize(frame, (new_width, new_height), interpolation=cv2.INTER_CUBIC)
-                    # تطبيق فلتر لمعالجة وتوضيح المعالم
                     gaussian = cv2.GaussianBlur(resized, (0, 0), 2.0)
                     enhanced = cv2.addWeighted(resized, 1.5, gaussian, -0.5, 0)
                     out.write(enhanced)
@@ -185,27 +186,30 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 out.release()
 
                 with open(output_path, 'rb') as f:
-                    await context.bot.send_video(chat_id=query.message.chat_id, video=f, caption=f"🔥 تمت المعالجة الفعلية وتعديل الدقة إلى {q_name} بنجاح يا يونس!")
+                    await context.bot.send_video(chat_id=query.message.chat_id, video=f, caption=f"🔥 تمت المعالجة وتعديل الدقة إلى {q_name} بنجاح يا يونس!")
 
-            # تنظيف الملفات
             for p in [input_path, output_path]:
                 if os.path.exists(p):
                     os.remove(p)
 
     except Exception as e:
-        logger.error(f"Error in OpenCV processing: {e}")
+        logger.error(f"Error in processing: {e}")
         await context.bot.send_message(
             chat_id=query.message.chat_id,
-            text=f"حدث خطأ أثناء المعالجة الفعلية يا يونس: {str(e)}"
+            text=f"عذراً يا يونس، حدث خطأ أثناء المعالجة: {str(e)}"
         )
 
 def main() -> None:
     application = Application.builder().token(TOKEN).build()
     application.add_handler(CommandHandler("start", start))
-    application.add_handler(MessageHandler((filters.TEXT & ~filters.COMMAND) | filters.VIDEO | filters.Document.ALL, handle_message))
+    
+    # فلاتر شاملة لاستقبال الفيديوهات، الملفات، المتحرك, أو الروابط النصية
+    msg_filter = filters.VIDEO | filters.Document.ALL | filters.ANIMATION | (filters.TEXT & ~filters.COMMAND)
+    application.add_handler(MessageHandler(msg_filter, handle_message))
+    
     application.add_handler(CallbackQueryHandler(button_callback))
     application.run_polling()
 
 if __name__ == "__main__":
     main()
-   
+                
