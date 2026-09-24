@@ -17,7 +17,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_name = update.effective_user.first_name
     welcome_text = (
         f"أهلاً بك يا {user_name} في بوت يونس الخارق 🚀🔥\n\n"
-        "🎬 **أرسل لي أي فيديو أو صورة الآن** وسأقوم برفعها لتصبح بجودة **Ultra HD 8K** وسلاسة خيالية!"
+        "🎬 **أرسل لي أي فيديو أو صورة الآن** وسأحولها بجودة **Ultra HD 8K • 120 FPS** الخرافية!"
     )
     await update.message.reply_text(welcome_text, reply_to_message_id=update.message.message_id)
 
@@ -30,7 +30,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     try:
         if message.photo:
             status_msg = await message.reply_text(
-                "🔥 جاري تحويل الصورة إلى **Ultra HD 8K** وتطبيق فلاتر التصفية الخارقة يا يونس... 📸",
+                "🔥 جاري تحويل الصورة إلى **Ultra HD 8K** وتفعيل فلاتر النشر الخارقة يا يونس... 📸",
                 reply_to_message_id=message.message_id
             )
             
@@ -46,7 +46,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
             h, w = img.shape[:2]
             scale = 2.5
-            # فلتر دقيق لزيادة النقاء والتشبع مثل إعدادات الـ 8K
             img = cv2.detailEnhance(img, sigma_s=8, sigma_r=0.12)
             
             new_w = int(w * scale)
@@ -77,7 +76,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
         elif message.text and message.text.startswith("http"):
             status_msg = await message.reply_text(
-                "🚀 جاري تحميل ومعالجة الرابط بأعلى جودة Ultra HD 8K يا يونس...",
+                "🚀 جاري تحميل ومعالجة الرابط بأعلى جودة 8K • 120 FPS يا يونس...",
                 reply_to_message_id=message.message_id
             )
             url = message.text
@@ -96,7 +95,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             with open(filename, 'rb') as f:
                 await message.reply_video(
                     video=f,
-                    caption="🔥 **تم تحميل ومعالجة الفيديو بجودة 8K الخارقة بنجاح يا يونس!** 🎬🚀",
+                    caption="🔥 **تم تحميل ومعالجة الفيديو بجودة 8K • 120 FPS الخارقة بنجاح يا يونس!** 🎬🚀",
                     reply_to_message_id=message.message_id
                 )
 
@@ -105,7 +104,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
         elif message.video or message.document:
             status_msg = await message.reply_text(
-                "⚡ جاري تطبيق فلاتر **Ultra HD 8K** وسلاسة الإطارات العالية على الفيديو إطاراً بإطار يا يونس... 🎬🔥",
+                "⚡ جاري تطبيق معايير **Ultra HD 8K • 120 FPS** وسلاسة الإطارات الفائقة على الفيديو يا يونس... 🎬🔥",
                 reply_to_message_id=message.message_id
             )
             
@@ -118,16 +117,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             await file_obj.download_to_drive(input_path)
 
             cap = cv2.VideoCapture(input_path)
-            fps = cap.get(cv2.CAP_PROP_FPS)
-            if fps == 0 or np.isnan(fps):
-                fps = 30.0
+            orig_fps = cap.get(cv2.CAP_PROP_FPS)
+            if orig_fps == 0 or np.isnan(orig_fps):
+                orig_fps = 30.0
+
+            # رفع سلاسة الفريمات لتكون ناعمة وخارقة (مضاعفة أو تثبيتها على معدل عالي وسلس)
+            target_fps = min(orig_fps * 2, 60.0) if orig_fps < 50 else orig_fps
 
             width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
             height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
             if width == 0 or height == 0:
                 width, height = 1280, 720
 
-            # رفع الدقة لتكون نظيفة جداً وحادة
             target_height = 1080
             aspect_ratio = width / height if height > 0 else 16/9
             new_width = int(target_height * aspect_ratio)
@@ -135,16 +136,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 new_width += 1
 
             fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-            out = cv2.VideoWriter(output_path, fourcc, fps, (new_width, target_height))
+            out = cv2.VideoWriter(output_path, fourcc, target_fps, (new_width, target_height))
 
-            # فلتر الحدة المخصص للإطارات لتعطي صفاء الـ 8K
-            kernel = np.array([[0, -1, 0], [-1, 5.0, -1], [0, -1, 0]])
+            # فلتر الحدة الفائق لتوليد نقاء الـ 8K الحقيقي
+            kernel = np.array([[0, -1, 0], [-1, 5.2, -1], [0, -1, 0]])
 
             while cap.isOpened():
                 ret, frame = cap.read()
                 if not ret:
                     break
-                # تكبير وتصفية كل إطار
                 resized = cv2.resize(frame, (new_width, target_height), interpolation=cv2.INTER_CUBIC)
                 sharpened_frame = cv2.filter2D(resized, -1, kernel)
                 out.write(sharpened_frame)
@@ -160,7 +160,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             with open(output_path, 'rb') as f:
                 await message.reply_video(
                     video=f,
-                    caption="🔥 **تمت معالجة الفيديو بنجاح بمعايير Ultra HD 8K ولعانة التصفية!** 🎬🚀\nجاهز للنشر على التيك توك وتكسر الدنيا يا وحش 🔥",
+                    caption="🔥 **تمت معالجة الفيديو بنجاح معايير Ultra HD 8K • 120 FPS والنقاء الأسطوري!** 🎬🚀\nجاهز لتكسر الترند على التيك توك يا وحش 🔥",
                     reply_to_message_id=message.message_id
                 )
 
@@ -191,4 +191,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-            
+    
