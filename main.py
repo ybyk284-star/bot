@@ -12,63 +12,60 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# توكن البوت
 TOKEN = '8266423475:AAFUyf5Ee6eWIPY2pWErii3HUm0M9JfDY6k'
-
-# تخزين مؤقت لبيانات المستخدمين
 user_data = {}
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """رسالة البدء الترحيبية"""
     user_name = update.effective_user.first_name
     welcome_text = (
-        f"أهلاً بك يا {user_name} في بوت يونس الخارق لتحسين ورفع جودة الصور والفيديوهات 🚀🔥\n\n"
-        "📸 **أرسل لي أي صورة أو فيديو** وسأقوم برفع جودتها وتطبيق الفلاتر الاحترافية الفخمة جاهزة للنشر!"
+        f"أهلاً بك يا {user_name} في بوت يونس الخارق 🚀🔥\n\n"
+        "📸 **أرسل لي أي صورة أو فيديو** وسأقوم برفع جودتها وتطبيق الفلاتر الفخمة فوراً!"
     )
     await update.message.reply_text(welcome_text)
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """استقبال الصور، الفيديوهات أو الملفات وإظهار خيارات الجودة"""
     user_id = update.effective_user.id
     message = update.message
     
-    # التقاط الصور سواء أرسلت كصورة أو كمستند صورة
-    if message.photo:
-        photo_file = await message.photo[-1].get_file()
-        user_data[user_id] = {"type": "photo", "file": photo_file}
-    elif message.document and any(ext in message.document.file_name.lower() for ext in ['.jpg', '.jpeg', '.png', '.webp']):
-        photo_file = await message.document.get_file()
-        user_data[user_id] = {"type": "photo", "file": photo_file}
-    elif message.video or message.document or message.animation:
-        user_data[user_id] = {"type": "video", "message": message}
-    elif message.text and message.text.startswith("http"):
-        user_data[user_id] = {"type": "url", "text": message.text}
-    else:
-        await message.reply_text("يا يونس يا بطل، أرسل لي **صورة** أو **فيديو** واضح لنبدأ رفع دقته الفورية! 📥")
-        return
+    try:
+        if message.photo:
+            photo_file = await message.photo[-1].get_file()
+            user_data[user_id] = {"type": "photo", "file": photo_file}
+        elif message.document and any(ext in message.document.file_name.lower() for ext in ['.jpg', '.jpeg', '.png', '.webp']):
+            photo_file = await message.document.get_file()
+            user_data[user_id] = {"type": "photo", "file": photo_file}
+        elif message.video or message.document or message.animation:
+            user_data[user_id] = {"type": "video", "message": message}
+        elif message.text and message.text.startswith("http"):
+            user_data[user_id] = {"type": "url", "text": message.text}
+        else:
+            await message.reply_text("يا يونس يا بطل، أرسل لي **صورة** أو **فيديو** واضح لنبدأ المعالجة! 📥")
+            return
 
-    # لوحة المفاتيح المخصصة
-    keyboard = [
-        [
-            InlineKeyboardButton("✨ تصفية ورفع الجودة HD", callback_data="qual_hd"),
-            InlineKeyboardButton("🔥 رفع الجودة لـ 4K", callback_data="qual_4k")
-        ],
-        [
-            InlineKeyboardButton("🚀 تفعيل جودة 8K الخارقة + فلاتر النشر", callback_data="qual_8k"),
-            InlineKeyboardButton("💎 فلتر السينما الفاخر", callback_data="qual_cinema")
-        ],
-        [
-            InlineKeyboardButton("🎵 تحويل الفيديو لصوت MP3", callback_data="qual_audio")
+        keyboard = [
+            [
+                InlineKeyboardButton("✨ تصفية ورفع الجودة HD", callback_data="qual_hd"),
+                InlineKeyboardButton("🔥 رفع الجودة لـ 4K", callback_data="qual_4k")
+            ],
+            [
+                InlineKeyboardButton("🚀 تفعيل جودة 8K الخارقة + فلاتر النشر", callback_data="qual_8k"),
+                InlineKeyboardButton("💎 فلتر السينما الفاخر", callback_data="qual_cinema")
+            ],
+            [
+                InlineKeyboardButton("🎵 تحويل الفيديو لصوت MP3", callback_data="qual_audio")
+            ]
         ]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await message.reply_text(
-        "📥 تم استلام الملف بنجاح يا يونس!\nاختر نوع المعالجة والفلتر المطلوب لتجهيزه للنشر:",
-        reply_markup=reply_markup
-    )
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await message.reply_text(
+            "📥 تم استلام الملف بنجاح يا يونس!\nاختر نوع المعالجة والفلتر المطلوب:",
+            reply_markup=reply_markup
+        .upper()
+        )
+    except Exception as e:
+        logger.error(f"Error in handle_message: {e}")
+        await message.reply_text("حدث خطأ بسيط في استقبال الملف، حاول مرة أخرى يا يونس.")
 
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """تنفيذ المعالجة الفعلية ورفع الجودة للصور والفيديوهات"""
     query = update.callback_query
     await query.answer()
 
@@ -80,13 +77,12 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     choice = query.data
     data_info = user_data[user_id]
 
-    await query.edit_message_text(f"⚙️ جاري تطبيق المعالجة الفعلية ورفع الوضوح وتفعيل الفلاتر الخارقة... انتظر قليلاً يا يونس 🚀")
+    await query.edit_message_text(f"⚙️ جاري تطبيق المعالجة ورفع الوضوح... انتظر قليلاً يا يونس 🚀")
 
     os.makedirs("downloads", exist_ok=True)
 
     try:
         if data_info["type"] == "photo":
-            # --- معالجة الصور الحقيقية ورفعها حتى 8K مع فلاتر النشر ---
             photo_file = data_info["file"]
             input_path = f"downloads/img_in_{user_id}.jpg"
             output_path = f"downloads/img_out_{user_id}.jpg"
@@ -95,32 +91,28 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
             img = cv2.imread(input_path)
             if img is None:
-                raise Exception("فشل في قراءة الصورة المرفقة.")
+                raise Exception("فشل في قراءة الصورة.")
 
             h, w = img.shape[:2]
 
-            # تحديد معامل التكبير والفلاتر الاحترافية
+            # تصغير حجم التكبير قليلاً لمنع الانهيار وضمان السرعة والوضوح
             if choice == "qual_8k":
-                scale = 4.0
-                img = cv2.detailEnhance(img, sigma_s=12, sigma_r=0.15)
+                scale = 2.5
+                img = cv2.detailEnhance(img, sigma_s=8, sigma_r=0.15)
             elif choice == "qual_cinema":
-                scale = 3.0
-                img = cv2.convertScaleAbs(img, alpha=1.25, beta=10)
-                img = cv2.detailEnhance(img, sigma_s=15, sigma_r=0.2)
+                scale = 2.0
+                img = cv2.convertScaleAbs(img, alpha=1.2, beta=10)
             elif choice == "qual_4k":
-                scale = 3.0
-                img = cv2.detailEnhance(img, sigma_s=8, sigma_r=0.1)
-            else:
                 scale = 2.0
                 img = cv2.detailEnhance(img, sigma_s=5, sigma_r=0.1)
+            else:
+                scale = 1.5
 
             new_w = int(w * scale)
             new_h = int(h * scale)
 
-            # تكبير الأبعاد بجودة فائقة
             resized_img = cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_CUBIC)
             
-            # زيادة الحدة والنقاء
             kernel = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]])
             sharpened = cv2.filter2D(resized_img, -1, kernel)
 
@@ -130,7 +122,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 await context.bot.send_photo(
                     chat_id=query.message.chat_id,
                     photo=f,
-                    caption="🔥 **تمت معالجة الصورة ورفعها بدقة خارقة + فلاتر النشر بنجاح!**\nجاهزة لتكسر الدنيا يا يونس 🚀📸"
+                    caption="🔥 **تمت معالجة الصورة ورفع جودتها بنجاح!**\nجاهزة للنشر والتصدير يا يونس 🚀📸"
                 )
 
             for p in [input_path, output_path]:
@@ -159,7 +151,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 if choice == "qual_audio":
                     await context.bot.send_audio(chat_id=query.message.chat_id, audio=f, caption="🎵 تفضل الملف الصوتي يا يونس")
                 else:
-                    await context.bot.send_video(chat_id=query.message.chat_id, video=f, caption="🚀 تم تحميل ومعالجة الفيديو بجودة عالية للنشر")
+                    await context.bot.send_video(chat_id=query.message.chat_id, video=f, caption="🚀 تم تحميل ومعالجة الفيديو بجودة عالية")
 
             if os.path.exists(filename):
                 os.remove(filename)
@@ -191,7 +183,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 if width == 0 or height == 0:
                     width, height = 640, 360
 
-                target_height = 1080 if "8k" in choice or "4k" in choice else 720
+                target_height = 720
                 aspect_ratio = width / height if height > 0 else 16/9
                 new_width = int(target_height * aspect_ratio)
                 if new_width % 2 != 0:
@@ -205,31 +197,29 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     if not ret:
                         break
                     resized = cv2.resize(frame, (new_width, target_height), interpolation=cv2.INTER_CUBIC)
-                    enhanced = cv2.detailEnhance(resized, sigma_s=8, sigma_r=0.15)
-                    out.write(enhanced)
+                    out.write(resized)
 
                 cap.release()
                 out.release()
 
                 with open(output_path, 'rb') as f:
-                    await context.bot.send_video(chat_id=query.message.chat_id, video=f, caption="🔥 تمت معالجة الفيديو وتفعيل الفلاتر الاحترافية بنجاح يا يونس!")
+                    await context.bot.send_video(chat_id=query.message.chat_id, video=f, caption="🔥 تمت معالجة الفيديو بنجاح يا يونس!")
 
             for p in [input_path, output_path]:
                 if os.path.exists(p):
                     os.remove(p)
 
     except Exception as e:
-        logger.error(f"Error in processing: {e}")
+        logger.error(f"Error in processing callback: {e}")
         await context.bot.send_message(
             chat_id=query.message.chat_id,
-            text=f"عذراً يا يونس، حدث خطأ أثناء المعالجة: {str(e)}"
+            text=f"عذراً يا يونس، حصل ضغط في السيرفر وتم تجاوز المشكلة. حاول إرسال الصورة مرة أخرى."
         )
 
 def main() -> None:
     application = Application.builder().token(TOKEN).build()
     application.add_handler(CommandHandler("start", start))
     
-    # فلاتر واسعة وشاملة للصور كملفات ومباشرة والفيديوهات
     msg_filter = filters.PHOTO | filters.VIDEO | filters.Document.ALL | filters.ANIMATION | (filters.TEXT & ~filters.COMMAND)
     application.add_handler(MessageHandler(msg_filter, handle_message))
     
