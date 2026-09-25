@@ -3,7 +3,7 @@ import logging
 import re
 import requests
 from bs4 import BeautifulSoup
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
 logging.basicConfig(
@@ -11,7 +11,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-TOKEN = '8266423475:AAFUyf5Ee6eWIPY2pWErii3HUm0M9JfDY6k'
+# التوكن الصحيح الخاص بك يا يونس
+TOKEN = '8266423475:AAHG4Im-8XKwmcT8NEHv8dQyHgJVvNx_t_g'
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_name = update.effective_user.first_name
@@ -25,7 +26,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def get_tiktok_bio(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     text = update.message.text.strip()
     
-    # التحقق مما إذا كان النص يحتوي على رابط تيك توك
     if "tiktok.com" not in text:
         await update.message.reply_text("❌ عذراً يا يونس، يرجى إرسال رابط حساب تيك توك صحيح.")
         return
@@ -33,7 +33,6 @@ async def get_tiktok_bio(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     processing_msg = await update.message.reply_text("⏳ جاري جلب البايو من تيك توك...")
 
     try:
-        # استخراج الرابط إذا كان مع نص إضافي
         urls = re.findall(r'(https?://[^\s]+)', text)
         target_url = urls[0] if urls else text
 
@@ -47,14 +46,11 @@ async def get_tiktok_bio(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             return
 
         soup = BeautifulSoup(response.text, 'html.parser')
-        
-        # البحث عن وصف الحساب (Bio) في بيانات الصفحة
         bio_element = soup.find('meta', attrs={'property': 'og:description'})
         
         if bio_element and bio_element.get('content'):
             bio_text = bio_element['content']
             
-            # تيك توك غالباً يدمج المتابعين مع الوصف في الـ meta، نقوم بترتيب النص
             result_text = (
                 "🎯 **تم سحب البايو بنجاح:**\n\n"
                 f"```text\n{bio_text}\n```\n"
