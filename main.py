@@ -67,33 +67,41 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             await processing_msg.edit_text("❌ حدث خطأ أثناء تحميل تيك توك.")
         return
 
-    # 2. تحميل فيديوهات إنستغرام (محدث عبر API جديد وقوي)
+    # 2. تحميل فيديوهات إنستغرام (مع التنظيف التلقائي للرابط وضمان السحب)
     if "instagram.com" in text or "instagr.am" in text:
         processing_msg = await update.message.reply_text("⚡️ جاري سحب فيديو إنستغرام...")
         try:
+            # تنظيف الرابط وحذف أي رموز استعلام زائدة
             clean_ig_url = text.split("?")[0]
             if clean_ig_url.endswith("/"):
                 clean_ig_url = clean_ig_url[:-1]
 
-            # استخدام API بديل ومستقر لسحب ريلز إنستغرام
+            video_url = ""
+            
+            # محاولة السحب عبر API الأول
             api_url = f"https://kaiz-apis.gleeze.com/api/instagram?url={clean_ig_url}"
             response = requests.get(api_url, timeout=15)
-            
-            video_url = ""
             if response.status_code == 200:
                 res_data = response.json()
                 video_url = res_data.get("url") or res_data.get("download_url", "")
 
-            # مسار احتياطي ثانٍ لضمان العمل 100%
+            # محاولة احتياطية ثانية في حال فشل الأول
             if not video_url:
                 alt_api = f"https://www.guruapi.tech/api/igdl?url={clean_ig_url}"
                 r = requests.get(alt_api, timeout=10)
                 if r.status_code == 200:
                     alt_data = r.json()
-                    # استخراج رابط الفيديو من النتائج
                     media_list = alt_data.get("data", [])
                     if media_list:
                         video_url = media_list[0].get("url", "")
+
+            # محاولة ثالثة عبر محرك بديل ومضمون
+            if not video_url:
+                third_api = f"https://api.vkrproject.com/v2/igdl?url={clean_ig_url}"
+                r3 = requests.get(third_api, timeout=10)
+                if r3.status_code == 200:
+                    d3 = r3.json()
+                    video_url = d3.get("data", [{}])[0].get("url", "") or d3.get("url", "")
 
             if video_url:
                 await processing_msg.delete()
@@ -106,7 +114,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 await processing_msg.edit_text("❌ عذراً يا يونس، تأكد أن حساب إنستغرام عام وليست القصة خاصة.")
         except Exception as e:
             logger.error(f"Instagram Error: {e}")
-            await processing_msg.edit_text("❌ حدث خطأ أثناء تحميل إنستغرام.")
+            await processing_msg.edit_text("❌ حدث خطأ أثناء تحميل إنستغرام. تأكد أن الرابط صحيح.")
         return
 
     # 3. جلب معلومات الحساب والأفاتار لتيك توك
@@ -176,7 +184,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     await update.message.reply_text(reply_text)
 
 def main() -> None:
-    # تشغيل سيرفر الويب الوهمي أولاً في الخلفية
     keep_alive()
     
     application = Application.builder().token(TOKEN).build()
@@ -186,4 +193,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-        
+            
