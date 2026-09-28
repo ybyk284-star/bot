@@ -1,11 +1,12 @@
 import os
 import logging
-import requests
 from threading import Thread
 from flask import Flask
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+import yt_dlp
 
+# إعداد سيرفر وهمي لرضا موقع Render (Web Service Port)
 app = Flask(__name__)
 
 @app.route('/')
@@ -31,7 +32,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_name = update.effective_user.first_name
     welcome_text = (
         f"أهلاً بك يا {user_name} في بوت التحميل الخارق 🚀🔥\n\n"
-        "• أرسل **رابط تيك توك** لتحميله بالجودة الأصلية!\n"
+        "• أرسل **رابط تيك توك** أو **إنستغرام** لتحميله بالجودة الأصلية!\n"
         "• أرسل **يوزر تيك توك** لجلب الأفاتار والبيانات."
     )
     if update.message:
@@ -40,66 +41,40 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     text = update.message.text.strip()
     
-    # 1. تحميل فيديوهات تيك توك (شغال 100% وبدون مشاكل)
-    if "tiktok.com" in text or "vt.tiktok.com" in text or "vm.tiktok.com" in text:
-        processing_msg = await update.message.reply_text("⚡️ جاري تحميل فيديو تيك توك...")
+    # 1. التحميل العام عبر محرك yt-dlp القوي (يدعم تيك توك وإنستغرام بكفاءة تامة)
+    if "tiktok.com" in text or "vt.tiktok.com" in text or "vm.tiktok.com" in text or "instagram.com" in text or "instagr.am" in text:
+        processing_msg = await update.message.reply_text("⚡️ جاري سحب ومعالجة الفيديو...")
         try:
-            target_url = text.split("?")[0]
-            api_url = f"https://www.tikwm.com/api/?url={target_url}&hd=1"
-            res = requests.get(api_url, timeout=15).json()
-
-            if res.get("code") == 0 and "data" in res:
-                video_data = res["data"]
-                hd_play = video_data.get("hdplay") or video_data.get("play")
-                title = video_data.get("title", "فيديو تيك توك")
-                
-                await processing_msg.delete()
-                await update.message.reply_video(
-                    video=hd_play,
-                    caption=f"🎥 **تم تحميل تيك توك بجودة عالية يا وحش!**\n\n📝 {title}",
-                    supports_streaming=True
-                )
-            else:
-                await processing_msg.edit_text("❌ لم أستطع تحميل فيديو تيك توك.")
-        except Exception as e:
-            logger.error(f"TikTok Error: {e}")
-            await processing_msg.edit_text("❌ حدث خطأ أثناء تحميل تيك توك.")
-        return
-
-    # 2. تحميل إنستغرام عبر سيرفر بديل دقيق
-    if "instagram.com" in text or "instagr.am" in text:
-        processing_msg = await update.message.reply_text("⚡️ جاري سحب فيديو إنستغرام...")
-        try:
-            clean_ig_url = text.split("?")[0]
-            if clean_ig_url.endswith("/"):
-                clean_ig_url = clean_ig_url[:-1]
-
-            # استخدام سيرفر بديل رسمي ومستقر
-            api_url = f"https://api.tikmate.app/api/lookup?url={clean_ig_url}" # ملاحظة: أو الـ API المعتاد
-            # سنستخدم بديل دقيق عبر خدمة سحب عامة
-            fallback_api = f"https://api.vkrproject.com/v2/igdl?url={clean_ig_url}"
-            resp = requests.get(fallback_api, timeout=10)
+            clean_url = text.split("?")[0]
+            
+            # إعدادات yt-dlp لاستخراج رابط الفيديو المباشر
+            ydl_opts = {
+                'format': 'best',
+                'quiet': True,
+                'no_warnings': True,
+            }
             
             video_url = ""
-            if resp.status_code == 200:
-                data = resp.json()
-                video_url = data.get("data", [{}])[0].get("url", "")
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(clean_url, download=False)
+                # استخراج الرابط المباشر للملف
+                video_url = info.get('url') or info.get('requested_formats', [{}])[0].get('url')
 
             if video_url:
                 await processing_msg.delete()
                 await update.message.reply_video(
                     video=video_url,
-                    caption="🎥 **تم تحميل فيديو إنستغرام بنجاح يا بطل!** 🚀",
+                    caption="🎥 **تم تحميل الفيديو بنجاح يا بطل!** 🚀",
                     supports_streaming=True
                 )
             else:
-                await processing_msg.edit_text("❌ عذراً يا يونس، الرابط قد يكون لحساب خاص أو تتطلب منصة إنستغرام تسجيلاً للدخول.")
+                await processing_msg.edit_text("❌ عذراً، لم أستطع استخراج رابط الفيديو. تأكد أن الحساب عام.")
         except Exception as e:
-            logger.error(f"IG Error: {e}")
-            await processing_msg.edit_text("❌ حدث خطأ أثناء معالجة رابط إنستغرام.")
+            logger.error(f"Download Error: {e}")
+            await processing_msg.edit_text("❌ حدث خطأ أثناء التحميل، تأكد أن الرابط صحيح وعام.")
         return
 
-    # 3. جلب معلومات وحسابات تيك توك
+    # 2. جلب معلومات حسابات تيك توك
     if not " " in text and len(text) < 30 and not text.startswith("السلام") and not text.startswith("هلا"):
         processing_msg = await update.message.reply_text("⚡️ جاري سحب الأفاتار والبيانات...")
         try:
@@ -107,6 +82,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             profile_url = f"https://www.tiktok.com/@{clean_user}"
             avatar_url = f"https://www.tikwm.com/avatar/{clean_user}"
             
+            import requests
             api_url = f"https://www.tikwm.com/api/user/info?unique_id={clean_user}"
             headers = {"User-Agent": "Mozilla/5.0"}
             
@@ -159,7 +135,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         "هلا": "هلا بيك يا وحش! أنا جاهز لأي خدمة تبيها.",
         "شلونك": "أنا بخير بشوفتك يا بطل، أنت كيف أمورك؟",
     }
-    reply_text = chat_responses.get(text.lower(), f"يا هلا فيك يا يونس! أرسل رابط تيك توك أو يوزر الحساب وأنا حاضر 🔥")
+    reply_text = chat_responses.get(text.lower(), f"يا هلا فيك يا يونس! أرسل رابط تيك توك أو إنستغرام أو يوزر الحساب وأنا حاضر 🔥")
     await update.message.reply_text(reply_text)
 
 def main() -> None:
