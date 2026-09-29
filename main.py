@@ -1,5 +1,7 @@
 import os
 import logging
+import time
+import requests
 from threading import Thread
 from flask import Flask
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -10,15 +12,30 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "Bot is alive and running!"
+    return "Bot is alive and running 24/7!"
 
 def run_web():
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
 
+# دالة المنبه الذاتي لتشغيل البوت 24 ساعة بدون انقطاع
+def self_ping():
+    # استبدل رابط موقعك على Render هنا لاحقاً، أو سيقوم بعمل بينغ تلقائي
+    app_url = os.environ.get("RENDER_EXTERNAL_URL", "http://localhost:10000")
+    while True:
+        try:
+            if "onrender.com" in app_url:
+                requests.get(app_url, timeout=10)
+        except Exception:
+            pass
+        # يرسل طلب لنفسه كل 4 دقائق عشان ما ينام السيرفر أبداً
+        time.sleep(240)
+
 def keep_alive():
-    t = Thread(target=run_web)
-    t.start()
+    t1 = Thread(target=run_web)
+    t1.start()
+    t2 = Thread(target=self_ping)
+    t2.start()
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
@@ -31,6 +48,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_name = update.effective_user.first_name
     welcome_text = (
         f"أهلاً بك يا {user_name} في بوت التحميل الخارق 🚀🔥\n\n"
+        "• البوت شغال الآن **24/7** بدون توقف!\n"
         "• أرسل **رابط تيك توك** أو **إنستغرام** لتحميله بأعلى جودة أصلية!\n"
         "• أرسل **يوزر تيك توك** لجلب الأفاتار والبيانات."
     )
@@ -40,7 +58,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     text = update.message.text.strip()
     
-    # 1. تحميل فيديوهات تيك توك أو إنستغرام عبر محرك yt-dlp القوي والمضمون
+    # 1. تحميل فيديوهات تيك توك أو إنستغرام عبر yt-dlp
     if "tiktok.com" in text or "vt.tiktok.com" in text or "vm.tiktok.com" in text or "instagram.com" in text or "instagr.am" in text:
         platform_name = "تيك توك" if "tiktok" in text or "vt." in text or "vm." in text else "إنستغرام"
         processing_msg = await update.message.reply_text(f"⚡️ جاري سحب فيديو {platform_name} بأعلى جودة أصلية...")
@@ -54,7 +72,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             
             video_url = ""
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info = yt_dlp.YoutubeDL(ydl_opts).extract_info(clean_url, download=False)
+                info = ydl.extract_info(clean_url, download=False)
                 video_url = info.get('url') or info.get('requested_formats', [{}])[0].get('url')
 
             if video_url:
@@ -79,7 +97,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             profile_url = f"https://www.tiktok.com/@{clean_user}"
             avatar_url = f"https://www.tikwm.com/avatar/{clean_user}"
             
-            import requests
             api_url = f"https://www.tikwm.com/api/user/info?unique_id={clean_user}"
             headers = {"User-Agent": "Mozilla/5.0"}
             
@@ -108,7 +125,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 f"✍️ **البايو:** {signature}\n"
                 f"👥 **المتابعين:** {followers}\n"
                 f"🤝 **المُتابَعون:** {following}\n"
-                f"❤️ **الإعجابات:** {hearts}\n\n"
+                f"❤️️ **الإعجابات:** {hearts}\n\n"
                 f"📌 تفضل الأفاتار الأصلي يا وحش!"
             )
 
@@ -144,4 +161,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-    
+            
