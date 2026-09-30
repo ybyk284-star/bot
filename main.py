@@ -55,22 +55,62 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     text = update.message.text.strip()
     
-    # 1. تحميل فيديوهات تيك توك وإنستغرام عبر yt_dlp مع إعدادات متقدمة تتجاوز أي حظر
-    if "tiktok.com" in text or "vt.tiktok.com" in text or "vm.tiktok.com" in text or "instagram.com" in text or "instagr.am" in text:
-        platform_name = "تيك توك" if "tiktok" in text or "vt." in text or "vm." in text else "إنستغرام"
-        processing_msg = await update.message.reply_text(f"⚡️ جاري سحب فيديو {platform_name} بأعلى جودة أصلية...")
+    # 1. تحميل فيديوهات تيك توك باستخدام نظام متعدد السيرفرات (APIs متناوبة)
+    if "tiktok.com" in text or "vt.tiktok.com" in text or "vm.tiktok.com" in text:
+        processing_msg = await update.message.reply_text("⚡️ جاري سحب فيديو تيك توك بأعلى جودة أصلية...")
+        try:
+            expanded_url = text
+            if "vt.tiktok.com" in text or "vm.tiktok.com" in text:
+                response = requests.head(text, allow_redirects=True, timeout=10)
+                expanded_url = response.url.split("?")[0]
+            else:
+                expanded_url = text.split("?")[0]
+
+            video_url = None
+
+            # المحاولة الأولى: استخدام TikWM API
+            try:
+                api_url_1 = f"https://www.tikwm.com/api/?url={expanded_url}&hd=1"
+                res_1 = requests.get(api_url_1, timeout=10).json()
+                if res_1.get("code") == 0 and "data" in res_1:
+                    video_url = res_1["data"].get("hdplay") or res_1["data"].get("play")
+            except Exception:
+                pass
+
+            # المحاولة الثانية: استخدام Cobet/SaveFrom البديل لو الأولى فشلت
+            if not video_url:
+                try:
+                    api_url_2 = f"https://tikcdn.io/api/ajax?url={expanded_url}"
+                    headers = {"User-Agent": "Mozilla/5.0"}
+                    res_2 = requests.get(api_url_2, headers=headers, timeout=10).json()
+                    if "data" in res_2:
+                        video_url = res_2["data"]
+                except Exception:
+                    pass
+
+            if video_url:
+                await processing_msg.delete()
+                await update.message.reply_video(
+                    video=video_url,
+                    caption="🎥 **تم تحميل فيديو تيك توك بنجاح يا بطل!** 🚀",
+                    supports_streaming=True
+                )
+            else:
+                await processing_msg.edit_text("❌ حدث خطأ أثناء تحميل تيك توك، تأكد أن الرابط صحيح وعام.")
+        except Exception as e:
+            logger.error(f"TikTok Error: {e}")
+            await processing_msg.edit_text("❌ حدث خطأ أثناء تحميل تيك توك.")
+        return
+
+    # 2. تحميل فيديوهات إنستغرام عبر yt-dlp القوي والمضمون
+    if "instagram.com" in text or "instagr.am" in text:
+        processing_msg = await update.message.reply_text("⚡️ جاري سحب فيديو إنستغرام بأعلى جودة أصلية...")
         try:
             clean_url = text.split("?")[0]
-            
             ydl_opts = {
                 'format': 'best',
                 'quiet': True,
                 'no_warnings': True,
-                'extractor_args': {'tiktok': {'web_app': True}},
-                'http_headers': {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-                    'Accept-Language': 'en-US,en;q=0.9',
-                }
             }
             
             video_url = ""
@@ -82,17 +122,17 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 await processing_msg.delete()
                 await update.message.reply_video(
                     video=video_url,
-                    caption=f"🎥 **تم تحميل فيديو {platform_name} بنجاح يا بطل!** 🚀",
+                    caption="🎥 **تم تحميل فيديو إنستغرام بنجاح يا بطل!** 🚀",
                     supports_streaming=True
                 )
             else:
-                await processing_msg.edit_text(f"❌ عذراً، لم أستطع استخراج الفيديو. تأكد أن الرابط صحيح وعام.")
+                await processing_msg.edit_text("❌ حدث خطأ أثناء تحميل إنستغرام.")
         except Exception as e:
-            logger.error(f"Download Error: {e}")
-            await processing_msg.edit_text(f"❌ حدث خطأ أثناء التحميل، تأكد أن الرابط صحيح.")
+            logger.error(f"IG Error: {e}")
+            await processing_msg.edit_text("❌ حدث خطأ أثناء تحميل إنستغرام.")
         return
 
-    # 2. جلب معلومات حسابات تيك توك
+    # 3. جلب معلومات حسابات تيك توك
     if not " " in text and len(text) < 30 and not text.startswith("السلام") and not text.startswith("هلا"):
         processing_msg = await update.message.reply_text("⚡️ جاري سحب الأفاتار والبيانات...")
         try:
@@ -164,4 +204,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-            
+    
