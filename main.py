@@ -55,48 +55,95 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     text = update.message.text.strip()
     
-    # تحميل فيديوهات تيك توك وإنستغرام عبر yt_dlp المحدث خصيصاً لتجاوز الحظر
-    if "tiktok.com" in text or "vt.tiktok.com" in text or "vm.tiktok.com" in text or "instagram.com" in text or "instagr.am" in text:
-        platform_name = "تيك توك" if "tiktok" in text or "vt." in text or "vm." in text else "إنستغرام"
-        processing_msg = await update.message.reply_text(f"⚡️ جاري سحب فيديو {platform_name} وإرساله لك الآن...")
+    # 1. تحميل فيديوهات تيك توك بنظام السباق بين السيرفرات (بدون تعليق نهائياً)
+    if "tiktok.com" in text or "vt.tiktok.com" in text or "vm.tiktok.com" in text:
+        processing_msg = await update.message.reply_text("⚡️ جاري سحب فيديو تيك توك وإرساله...")
         try:
-            clean_url = text.split("?")[0]
-            
-            ydl_opts = {
-                'format': 'best',
-                'quiet': True,
-                'no_warnings': True,
-                'extractor_args': {'tiktok': {'web_app': True}},
-                'http_headers': {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-                    'Accept-Language': 'en-US,en;q=0.9',
-                }
-            }
-            
-            video_url = ""
-            video_title = f"🎥 **تم تحميل فيديو {platform_name} بنجاح يا بطل!** 🚀"
-            
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(clean_url, download=False)
-                video_url = info.get('url') or info.get('requested_formats', [{}])[0].get('url')
-                if info.get('title'):
-                    video_title = f"🎥 **{info.get('title')}**"
+            expanded_url = text
+            if "vt.tiktok.com" in text or "vm.tiktok.com" in text:
+                try:
+                    res_head = requests.head(text, allow_redirects=True, timeout=4)
+                    expanded_url = res_head.url.split("?")[0]
+                except Exception:
+                    expanded_url = text.split("?")[0]
+            else:
+                expanded_url = text.split("?")[0]
+
+            video_url = None
+            video_title = "🎥 تم تحميل فيديو تيك توك بنجاح يا بطل! 🚀"
+
+            # السيرفر الأول: TikWM
+            try:
+                r1 = requests.get(f"https://www.tikwm.com/api/?url={expanded_url}&hd=1", timeout=5).json()
+                if r1.get("code") == 0 and "data" in r1:
+                    video_url = r1["data"].get("hdplay") or r1["data"].get("play")
+                    video_title = r1["data"].get("title", video_title)
+            except Exception:
+                pass
+
+            # السيرفر الثاني لو الأول فشل: Tikmate / Tikcdn
+            if not video_url:
+                try:
+                    r2 = requests.get(f"https://tikcdn.io/api/ajax?url={expanded_url}", headers={"User-Agent": "Mozilla/5.0"}, timeout=5).json()
+                    if "data" in r2:
+                        video_url = r2["data"]
+                except Exception:
+                    pass
+
+            # السيرفر الثالث لو الكل فشل: Cobet API السريع
+            if not video_url:
+                try:
+                    r3 = requests.post("https://co.wuk.sh/api/json", json={"url": expanded_url, "fps": True}, headers={"Accept": "application/json"}, timeout=5).json()
+                    if "url" in r3:
+                        video_url = r3["url"]
+                except Exception:
+                    pass
 
             if video_url:
                 await processing_msg.delete()
                 await update.message.reply_video(
                     video=video_url,
-                    caption=video_title,
+                    caption=f"🎥 **{video_title}**",
                     supports_streaming=True
                 )
             else:
-                await processing_msg.edit_text(f"❌ عذراً، لم أستطع استخراج الفيديو. تأكد أن الرابط صحيح وعام.")
+                await processing_msg.edit_text("❌ عذراً، تيك توك يحظر الرابط حالياً. جرب فيديو آخر.")
         except Exception as e:
-            logger.error(f"Download Error: {e}")
-            await processing_msg.edit_text(f"❌ حدث خطأ أثناء التحميل، تأكد أن الرابط صحيح وعام.")
+            logger.error(f"TikTok Multi-API Error: {e}")
+            await processing_msg.edit_text("❌ حدث خطأ أثناء التحميل.")
         return
 
-    # جلب معلومات حسابات تيك توك
+    # 2. تحميل فيديوهات إنستغرام عبر yt-dlp
+    if "instagram.com" in text or "instagr.am" in text:
+        processing_msg = await update.message.reply_text("⚡️ جاري سحب فيديو إنستغرام بأعلى جودة أصلية...")
+        try:
+            clean_url = text.split("?")[0]
+            ydl_opts = {
+                'format': 'best',
+                'quiet': True,
+                'no_warnings': True,
+            }
+            
+            video_url = ""
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(clean_url, download=False)
+                video_url = info.get('url') or info.get('requested_formats', [{}])[0].get('url')
+
+            if video_url:
+                await processing_msg.delete()
+                await update.message.reply_video(
+                    video=video_url,
+                    caption="🎥 **تم تحميل فيديو إنستغرام بنجاح يا بطل!** 🚀",
+                    supports_streaming=True
+                )
+            else:
+                await processing_msg.edit_text("❌ حدث خطأ أثناء تحميل إنستغرام.")
+        except Exception as e:
+            logger.error(f"IG Error: {e}")
+            await processing_msg.edit_text("❌ حدث خطأ أثناء تحميل إنستغرام.")
+        return
+
+    # 3. جلب معلومات حسابات تيك توك
     if not " " in text and len(text) < 30 and not text.startswith("السلام") and not text.startswith("هلا"):
         processing_msg = await update.message.reply_text("⚡️ جاري سحب الأفاتار والبيانات...")
         try:
@@ -168,4 +215,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-    
+            
