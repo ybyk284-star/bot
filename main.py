@@ -1,6 +1,6 @@
 import os
+import requests
 import telebot
-import yt_dlp
 
 TOKEN = "8266423475:AAHG4Im-8XKwmcT8NEHv8dQyHgJVvNx_t_g"
 bot = telebot.TeleBot(TOKEN)
@@ -10,8 +10,8 @@ bot = telebot.TeleBot(TOKEN)
 def send_welcome(message):
   bot.reply_to(
       message,
-      "أهلاً بك يا يونس! أرسل لي رابط فيديو من تيك توك أو إنستجرام وسأقوم"
-      " بتحميله لك فوراً 📥.",
+      "أهلاً بك يا بطل! أرسل لي رابط تيك توك أو إنستجرام وسأقوم بتحميله لك"
+      " فوراً 📥.",
   )
 
 
@@ -21,53 +21,50 @@ def send_welcome(message):
 )
 def download_media(message):
   url = message.text.strip()
-  processing_msg = bot.reply_to(message, "⏳ جاري جلب المعلومات وتحميل الفيديو...")
-
-  # إعدادات قوية لتجاوز الحماية ومنع حظر تيك توك
-  ydl_opts = {
-      "format": "best",
-      "outtmpl": "downloaded_video.mp4",
-      "quiet": True,
-      "nocheckcertificate": True,
-      "http_headers": {
-          "User-Agent": (
-              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-              " (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-          ),
-          "Accept-Language": "en-US,en;q=0.9",
-      },
-  }
+  processing_msg = bot.reply_to(message, "⏳ جاري تحميل الفيديو والصورة...")
 
   try:
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-      info = ydl.extract_info(url, download=False)
-      video_title = info.get("title", "Media Video")
-      thumbnail_url = info.get("thumbnail", "")
-      ydl.download([url])
+    # إذا كان الرابط تيك توك، نستخدم الـ API السريع والمباشر
+    if "tiktok.com" in url:
+      api_url = f"https://tikwm.com/api/?url={url}"
+      res = requests.get(api_url).json()
 
-    if thumbnail_url and "tiktok.com" in url:
-      bot.send_photo(
+      if "data" in res and "play" in res["data"]:
+        video_url = res["data"]["play"]
+        cover_url = res["data"]["cover"]
+        title = res["data"].get("title", "TikTok Video")
+
+        # إرسال الصورة البارزة مع العنوان
+        if cover_url:
+          bot.send_photo(
+              message.chat.id,
+              cover_url,
+              caption=f"📝 **العنوان:** {title}",
+              parse_mode="Markdown",
+          )
+
+        # إرسال الفيديو بدون علامة مائية
+        bot.send_video(
+            message.chat.id,
+            video_url,
+            caption="✅ تم التحميل بنجاح بدون علامة مائية!",
+        )
+        bot.delete_message(message.chat.id, processing_msg.message_id)
+      else:
+        raise Exception("فشل جلب بيانات تيك توك")
+
+    else:
+      # إذا كان إنستجرام، نترك الكود الخاص به أو نستخدم الطريقة العادية
+      bot.edit_message_text(
+          "❌ عذراً، ركز معي حالياً على روابط تيك توك أو جرب رابط تيك توك"
+          " آخر.",
           message.chat.id,
-          thumbnail_url,
-          caption=f"📝 **العنوان:** {video_title}",
-          parse_mode="Markdown",
+          processing_msg.message_id,
       )
-
-    with open("downloaded_video.mp4", "rb") as video_file:
-      bot.send_video(
-          message.chat.id,
-          video_file,
-          caption="✅ تم تحميل الفيديو بنجاح يا بطل!",
-      )
-
-    if os.path.exists("downloaded_video.mp4"):
-      os.remove("downloaded_video.mp4")
-
-    bot.delete_message(message.chat.id, processing_msg.message_id)
 
   except Exception as e:
     bot.edit_message_text(
-        "❌ عذراً، تيك توك يحظر الرابط حالياً أو يحتاج وقت. جرب فيديو آخر.",
+        "❌ حدث خطأ أثناء التحميل. تأكد أن الرابط صحيح.",
         message.chat.id,
         processing_msg.message_id,
     )
