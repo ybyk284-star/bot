@@ -55,47 +55,22 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     text = update.message.text.strip()
     
-    # 1. تحميل فيديوهات تيك توك بالطريقة السحرية الأصلية مع جلب وصف الفيديو
-    if "tiktok.com" in text or "vt.tiktok.com" in text or "vm.tiktok.com" in text:
-        processing_msg = await update.message.reply_text("⚡️ جاري سحب فيديو تيك توك بالجودة الأصلية...")
-        try:
-            expanded_url = text
-            if "vt.tiktok.com" in text or "vm.tiktok.com" in text:
-                response = requests.head(text, allow_redirects=True, timeout=10)
-                expanded_url = response.url.split("?")[0]
-            else:
-                expanded_url = text.split("?")[0]
-
-            api_url = f"https://www.tikwm.com/api/?url={expanded_url}&hd=1"
-            res = requests.get(api_url, timeout=15).json()
-
-            if res.get("code") == 0 and "data" in res:
-                video_data = res["data"]
-                video_url = video_data.get("hdplay") or video_data.get("play")
-                video_title = video_data.get("title", "تم تحميل الفيديو بنجاح يا وحش!")
-                
-                await processing_msg.delete()
-                await update.message.reply_video(
-                    video=video_url,
-                    caption=f"🎥 **{video_title}**",
-                    supports_streaming=True
-                )
-            else:
-                await processing_msg.edit_text("❌ حدث خطأ أثناء تحميل تيك توك.")
-        except Exception as e:
-            logger.error(f"TikTok Error: {e}")
-            await processing_msg.edit_text("❌ حدث خطأ أثناء تحميل تيك توك.")
-        return
-
-    # 2. تحميل فيديوهات إنستغرام عبر yt-dlp
-    if "instagram.com" in text or "instagr.am" in text:
-        processing_msg = await update.message.reply_text("⚡️ جاري سحب فيديو إنستغرام بأعلى جودة أصلية...")
+    # تحميل فيديوهات تيك توك وإنستغرام عبر yt_dlp القوي
+    if "tiktok.com" in text or "vt.tiktok.com" in text or "vm.tiktok.com" in text or "instagram.com" in text or "instagr.am" in text:
+        platform_name = "تيك توك" if "tiktok" in text or "vt." in text or "vm." in text else "إنستغرام"
+        processing_msg = await update.message.reply_text(f"⚡️ جاري سحب فيديو {platform_name} بأعلى جودة أصلية...")
         try:
             clean_url = text.split("?")[0]
+            
             ydl_opts = {
                 'format': 'best',
                 'quiet': True,
                 'no_warnings': True,
+                'extractor_args': {'tiktok': {'web_app': True}},
+                'http_headers': {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                    'Accept-Language': 'en-US,en;q=0.9',
+                }
             }
             
             video_url = ""
@@ -107,17 +82,17 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 await processing_msg.delete()
                 await update.message.reply_video(
                     video=video_url,
-                    caption="🎥 **تم تحميل فيديو إنستغرام بنجاح يا بطل!** 🚀",
+                    caption=f"🎥 **تم تحميل فيديو {platform_name} بنجاح يا بطل!** 🚀",
                     supports_streaming=True
                 )
             else:
-                await processing_msg.edit_text("❌ حدث خطأ أثناء تحميل إنستغرام.")
+                await processing_msg.edit_text(f"❌ عذراً، لم أستطع استخراج الفيديو. تأكد أن الرابط صحيح وعام.")
         except Exception as e:
-            logger.error(f"IG Error: {e}")
-            await processing_msg.edit_text("❌ حدث خطأ أثناء تحميل إنستغرام.")
+            logger.error(f"Download Error: {e}")
+            await processing_msg.edit_text(f"❌ حدث خطأ أثناء التحميل، تأكد أن الرابط صحيح وعام.")
         return
 
-    # 3. جلب معلومات حسابات تيك توك
+    # جلب معلومات حسابات تيك توك
     if not " " in text and len(text) < 30 and not text.startswith("السلام") and not text.startswith("هلا"):
         processing_msg = await update.message.reply_text("⚡️ جاري سحب الأفاتار والبيانات...")
         try:
@@ -189,4 +164,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-            
+        
