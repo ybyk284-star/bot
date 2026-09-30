@@ -10,8 +10,8 @@ bot = telebot.TeleBot(TOKEN)
 def send_welcome(message):
   bot.reply_to(
       message,
-      "أهلاً بك! أرسل لي رابط أي فيديو تيك توك وسأقوم بتحميله لك بدون علامة"
-      " مائية مع الصورة الخاصة به 📥.",
+      "أهلاً بك يا بطل! أرسل لي رابط أي فيديو تيك توك وسأقوم بتحميله لك بدون"
+      " علامة مائية مع الصورة الخاصة به 📥.",
   )
 
 
@@ -24,6 +24,12 @@ def download_tiktok(message):
       "format": "best",
       "outtmpl": "tiktok_video.mp4",
       "quiet": True,
+      "http_headers": {
+          "User-Agent": (
+              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+              " (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+          )
+      },
   }
 
   try:
@@ -45,7 +51,7 @@ def download_tiktok(message):
       bot.send_video(
           message.chat.id,
           video_file,
-          caption="✅ تم التنزيل بنجاح بواسطة البوت الخاص بك.",
+          caption="✅ تم التنزيل بنجاح بدون علامة مائية!",
       )
 
     if os.path.exists("tiktok_video.mp4"):
@@ -55,7 +61,7 @@ def download_tiktok(message):
 
   except Exception as e:
     bot.edit_message_text(
-        f"❌ حدث خطأ أثناء التحميل: {str(e)}",
+        f"❌ عذراً، حدث خطأ أو أن الرابط محظور حالياً: {str(e)}",
         message.chat.id,
         processing_msg.message_id,
     )
