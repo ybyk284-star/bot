@@ -2,7 +2,6 @@ import os
 import logging
 import time
 import re
-import json
 import requests
 from threading import Thread
 from flask import Flask
@@ -10,6 +9,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 import yt_dlp
 
+app = FlaskName__ if '__name__'==__name__ else __name__
 app = Flask(__name__)
 
 @app.route('/')
@@ -57,47 +57,44 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     text = update.message.text.strip()
     
-    # 1. تحميل فيديوهات تيك توك بطريقة الـ Scraping المباشرة (بدون حظر)
+    # 1. تحميل فيديوهات تيك توك مع منع التعليق والانتقال الفوري للبديل
     if "tiktok.com" in text or "vt.tiktok.com" in text or "vm.tiktok.com" in text:
-        processing_msg = await update.message.reply_text("⚡️ جاري سحب فيديو تيك توك بالطريقة المباشرة...")
+        processing_msg = await update.message.reply_text("⚡️ جاري سحب فيديو تيك توك وإرساله...")
         try:
-            # توسيع الرابط المختصر أولاً
             expanded_url = text
             if "vt.tiktok.com" in text or "vm.tiktok.com" in text:
-                res_head = requests.head(text, allow_redirects=True, timeout=10)
-                expanded_url = res_head.url.split("?")[0]
+                try:
+                    res_head = requests.head(text, allow_redirects=True, timeout=5)
+                    expanded_url = res_head.url.split("?")[0]
+                except Exception:
+                    expanded_url = text.split("?")[0]
             else:
                 expanded_url = text.split("?")[0]
 
             video_url = None
             video_title = "🎥 تم تحميل فيديو تيك توك بنجاح يا بطل! 🚀"
 
-            # محاولة السحب عبر سحب الصفحة واستخراج رابط الفيديو من البيانات المخفية
-            headers = {
-                "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1",
-                "Accept-Language": "ar-SA,ar;q=0.9,en-US;q=0.8,en;q=0.7"
-            }
-            
-            page_res = requests.get(expanded_url, headers=headers, timeout=15)
-            if page_res.status_code == 200:
-                html_content = page_res.text
-                # البحث عن رابط الفيديو داخل كود الصفحة
-                match = re.search(r'"playAddr"\s*:\s*"([^"]+)"', html_content)
-                if match:
-                    video_url = match.group(1).encode().decode('unicode-escape')
-                else:
-                    # محاولة بحث ثانية بنمط مختلف
-                    match2 = re.search(r'https://v\d+\.tiktokcdn\.com/[^"]+', html_content)
-                    if match2:
-                        video_url = match2.group(0)
-
-            # لو ما ضبطت، نجرب سرفراً بديلاً مجانياً عبر API سريع وخفيف
-            if not video_url:
-                api_fallback = f"https://tikwm.com/api/?url={expanded_url}&hd=1"
-                fb_res = requests.get(api_fallback, timeout=10).json()
+            # محاولة أولية سريعة عبر TikWM API مع مهلة قصيرة لعدم التعليق
+            try:
+                api_fallback = f"https://www.tikwm.com/api/?url={expanded_url}&hd=1"
+                fb_res = requests.get(api_fallback, timeout=6).json()
                 if fb_res.get("code") == 0 and "data" in fb_res:
                     video_url = fb_res["data"].get("hdplay") or fb_res["data"].get("play")
                     video_title = fb_res["data"].get("title", "🎥 تم تحميل فيديو تيك توك بنجاح!")
+            except Exception:
+                pass
+
+            # إذا فشلت، نجرب محاولة ثانية عبر استخراج الكود المباشر للصفحة
+            if not video_url:
+                try:
+                    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36"}
+                    page_res = requests.get(expanded_url, headers=headers, timeout=6)
+                    if page_res.status_code == 200:
+                        match = re.search(r'"playAddr"\s*:\s*"([^"]+)"', page_res.text)
+                        if match:
+                            video_url = match.group(1).encode().decode('unicode-escape')
+                except Exception:
+                    pass
 
             if video_url:
                 await processing_msg.delete()
@@ -107,15 +104,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                     supports_streaming=True
                 )
             else:
-                await processing_msg.edit_text("❌ عذراً، تيك توك يحظر هذا الرابط مؤقتاً. جرب رابط فيديو آخر.")
+                await processing_msg.edit_text("❌ عذراً، تيك توك يرفض الرابط مؤقتاً، جرب فيديو آخر.")
         except Exception as e:
-            logger.error(f"TikTok Scraping Error: {e}")
-            await processing_msg.edit_text("❌ حدث خطأ أثناء التحميل، تأكد أن الرابط صحيح وعام.")
+            logger.error(f"TikTok Error: {e}")
+            await processing_msg.edit_text("❌ حدث خطأ، تأكد أن الرابط صحيح وعام.")
         return
 
     # 2. تحميل فيديوهات إنستغرام عبر yt-dlp
     if "instagram.com" in text or "instagr.am" in text:
-        processing_msg = await update.message.reply_text("⚡️ جاري سحب فيديو إنستغرام بأعلى جودة أصلية...")
+        processing_msg = await update.message.reply_text("⚡️️ جاري سحب فيديو إنستغرام بأعلى جودة أصلية...")
         try:
             clean_url = text.split("?")[0]
             ydl_opts = {
