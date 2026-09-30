@@ -1,7 +1,6 @@
 import os
 import logging
 import time
-import re
 import requests
 from threading import Thread
 from flask import Flask
@@ -9,7 +8,6 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 import yt_dlp
 
-app = FlaskName__ if '__name__'==__name__ else __name__
 app = Flask(__name__)
 
 @app.route('/')
@@ -57,90 +55,48 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     text = update.message.text.strip()
     
-    # 1. تحميل فيديوهات تيك توك مع منع التعليق والانتقال الفوري للبديل
-    if "tiktok.com" in text or "vt.tiktok.com" in text or "vm.tiktok.com" in text:
-        processing_msg = await update.message.reply_text("⚡️ جاري سحب فيديو تيك توك وإرساله...")
-        try:
-            expanded_url = text
-            if "vt.tiktok.com" in text or "vm.tiktok.com" in text:
-                try:
-                    res_head = requests.head(text, allow_redirects=True, timeout=5)
-                    expanded_url = res_head.url.split("?")[0]
-                except Exception:
-                    expanded_url = text.split("?")[0]
-            else:
-                expanded_url = text.split("?")[0]
-
-            video_url = None
-            video_title = "🎥 تم تحميل فيديو تيك توك بنجاح يا بطل! 🚀"
-
-            # محاولة أولية سريعة عبر TikWM API مع مهلة قصيرة لعدم التعليق
-            try:
-                api_fallback = f"https://www.tikwm.com/api/?url={expanded_url}&hd=1"
-                fb_res = requests.get(api_fallback, timeout=6).json()
-                if fb_res.get("code") == 0 and "data" in fb_res:
-                    video_url = fb_res["data"].get("hdplay") or fb_res["data"].get("play")
-                    video_title = fb_res["data"].get("title", "🎥 تم تحميل فيديو تيك توك بنجاح!")
-            except Exception:
-                pass
-
-            # إذا فشلت، نجرب محاولة ثانية عبر استخراج الكود المباشر للصفحة
-            if not video_url:
-                try:
-                    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36"}
-                    page_res = requests.get(expanded_url, headers=headers, timeout=6)
-                    if page_res.status_code == 200:
-                        match = re.search(r'"playAddr"\s*:\s*"([^"]+)"', page_res.text)
-                        if match:
-                            video_url = match.group(1).encode().decode('unicode-escape')
-                except Exception:
-                    pass
-
-            if video_url:
-                await processing_msg.delete()
-                await update.message.reply_video(
-                    video=video_url,
-                    caption=f"🎥 **{video_title}**",
-                    supports_streaming=True
-                )
-            else:
-                await processing_msg.edit_text("❌ عذراً، تيك توك يرفض الرابط مؤقتاً، جرب فيديو آخر.")
-        except Exception as e:
-            logger.error(f"TikTok Error: {e}")
-            await processing_msg.edit_text("❌ حدث خطأ، تأكد أن الرابط صحيح وعام.")
-        return
-
-    # 2. تحميل فيديوهات إنستغرام عبر yt-dlp
-    if "instagram.com" in text or "instagr.am" in text:
-        processing_msg = await update.message.reply_text("⚡️️ جاري سحب فيديو إنستغرام بأعلى جودة أصلية...")
+    # تحميل فيديوهات تيك توك وإنستغرام عبر yt_dlp المحدث خصيصاً لتجاوز الحظر
+    if "tiktok.com" in text or "vt.tiktok.com" in text or "vm.tiktok.com" in text or "instagram.com" in text or "instagr.am" in text:
+        platform_name = "تيك توك" if "tiktok" in text or "vt." in text or "vm." in text else "إنستغرام"
+        processing_msg = await update.message.reply_text(f"⚡️ جاري سحب فيديو {platform_name} وإرساله لك الآن...")
         try:
             clean_url = text.split("?")[0]
+            
             ydl_opts = {
                 'format': 'best',
                 'quiet': True,
                 'no_warnings': True,
+                'extractor_args': {'tiktok': {'web_app': True}},
+                'http_headers': {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                    'Accept-Language': 'en-US,en;q=0.9',
+                }
             }
             
             video_url = ""
+            video_title = f"🎥 **تم تحميل فيديو {platform_name} بنجاح يا بطل!** 🚀"
+            
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(clean_url, download=False)
                 video_url = info.get('url') or info.get('requested_formats', [{}])[0].get('url')
+                if info.get('title'):
+                    video_title = f"🎥 **{info.get('title')}**"
 
             if video_url:
                 await processing_msg.delete()
                 await update.message.reply_video(
                     video=video_url,
-                    caption="🎥 **تم تحميل فيديو إنستغرام بنجاح يا بطل!** 🚀",
+                    caption=video_title,
                     supports_streaming=True
                 )
             else:
-                await processing_msg.edit_text("❌ حدث خطأ أثناء تحميل إنستغرام.")
+                await processing_msg.edit_text(f"❌ عذراً، لم أستطع استخراج الفيديو. تأكد أن الرابط صحيح وعام.")
         except Exception as e:
-            logger.error(f"IG Error: {e}")
-            await processing_msg.edit_text("❌ حدث خطأ أثناء تحميل إنستغرام.")
+            logger.error(f"Download Error: {e}")
+            await processing_msg.edit_text(f"❌ حدث خطأ أثناء التحميل، تأكد أن الرابط صحيح وعام.")
         return
 
-    # 3. جلب معلومات حسابات تيك توك
+    # جلب معلومات حسابات تيك توك
     if not " " in text and len(text) < 30 and not text.startswith("السلام") and not text.startswith("هلا"):
         processing_msg = await update.message.reply_text("⚡️ جاري سحب الأفاتار والبيانات...")
         try:
@@ -212,3 +168,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+    
