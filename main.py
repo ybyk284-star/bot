@@ -55,12 +55,19 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     text = update.message.text.strip()
     
-    # 1. تحميل فيديوهات تيك توك عبر API مباشر ومستقر 100%
+    # 1. تحميل فيديوهات تيك توك (مع دعم الروابط المختصرة وفك التوجيه)
     if "tiktok.com" in text or "vt.tiktok.com" in text or "vm.tiktok.com" in text:
-        processing_msg = await update.message.reply_text("⚡️ جاري تحميل فيديو تيك توك بأعلى جودة...")
+        processing_msg = await update.message.reply_text("⚡️ جاري فك وتحميل فيديو تيك توك بأعلى جودة...")
         try:
-            target_url = text.split("?")[0]
-            api_url = f"https://www.tikwm.com/api/?url={target_url}&hd=1"
+            # فك رابط التوجيه المختصر للحصول على الرابط الحقيقي
+            expanded_url = text
+            if "vt.tiktok.com" in text or "vm.tiktok.com" in text:
+                response = requests.head(text, allow_redirects=True, timeout=10)
+                expanded_url = response.url.split("?")[0]
+            else:
+                expanded_url = text.split("?")[0]
+
+            api_url = f"https://www.tikwm.com/api/?url={expanded_url}&hd=1"
             res = requests.get(api_url, timeout=15).json()
 
             if res.get("code") == 0 and "data" in res:
@@ -147,7 +154,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 f"✍️ **البايو:** {signature}\n"
                 f"👥 **المتابعين:** {followers}\n"
                 f"🤝 **المُتابَعون:** {following}\n"
-                f"❤️️ **الإعجابات:** {hearts}\n\n"
+                f"❤ **الإعجابات:** {hearts}\n\n"
                 f"📌 تفضل الأفاتار الأصلي يا وحش!"
             )
 
@@ -183,4 +190,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-    
+            
