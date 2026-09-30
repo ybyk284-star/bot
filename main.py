@@ -10,61 +10,54 @@ bot = telebot.TeleBot(TOKEN)
 def send_welcome(message):
   bot.reply_to(
       message,
-      "أهلاً بك يا بطل! أرسل لي رابط تيك توك أو إنستجرام وسأقوم بتحميله لك"
-      " فوراً 📥.",
+      "أهلاً بك يا يونس! أرسل لي رابط تيك توك وسأقوم بتحميله لك فوراً وبأعلى"
+      " جودة 📥.",
   )
 
 
-@bot.message_handler(
-    func=lambda message: "tiktok.com" in message.text
-    or "instagram.com" in message.text
-)
-def download_media(message):
+@bot.message_handler(func=lambda message: "tiktok.com" in message.text)
+def download_tiktok(message):
   url = message.text.strip()
-  processing_msg = bot.reply_to(message, "⏳ جاري تحميل الفيديو والصورة...")
+  processing_msg = bot.reply_to(message, "⏳ جاري فحص الرابط وتحميل الفيديو...")
 
   try:
-    # إذا كان الرابط تيك توك، نستخدم الـ API السريع والمباشر
-    if "tiktok.com" in url:
-      api_url = f"https://tikwm.com/api/?url={url}"
-      res = requests.get(api_url).json()
+    # خطوة مهمة: فك الرابط المختصر (vt.tiktok.com) للحصول على الرابط الأصلي الطويل
+    if "vt.tiktok.com" in url or "vm.tiktok.com" in url:
+      session = requests.Session()
+      response = session.head(url, allow_redirects=True)
+      url = response.url
 
-      if "data" in res and "play" in res["data"]:
-        video_url = res["data"]["play"]
-        cover_url = res["data"]["cover"]
-        title = res["data"].get("title", "TikTok Video")
+    # إرسال الرابط الحقيقي للـ API الخاص بالتيك توك
+    api_url = f"https://tikwm.com/api/?url={url}"
+    res = requests.get(api_url).json()
 
-        # إرسال الصورة البارزة مع العنوان
-        if cover_url:
-          bot.send_photo(
-              message.chat.id,
-              cover_url,
-              caption=f"📝 **العنوان:** {title}",
-              parse_mode="Markdown",
-          )
+    if "data" in res and "play" in res["data"]:
+      video_url = res["data"]["play"]
+      cover_url = res["data"]["cover"]
+      title = res["data"].get("title", "TikTok Video")
 
-        # إرسال الفيديو بدون علامة مائية
-        bot.send_video(
+      # إرسال الصورة البارزة (Thumbnail) إذا وجدت مع العنوان
+      if cover_url:
+        bot.send_photo(
             message.chat.id,
-            video_url,
-            caption="✅ تم التحميل بنجاح بدون علامة مائية!",
+            cover_url,
+            caption=f"📝 **العنوان:** {title}",
+            parse_mode="Markdown",
         )
-        bot.delete_message(message.chat.id, processing_msg.message_id)
-      else:
-        raise Exception("فشل جلب بيانات تيك توك")
 
-    else:
-      # إذا كان إنستجرام، نترك الكود الخاص به أو نستخدم الطريقة العادية
-      bot.edit_message_text(
-          "❌ عذراً، ركز معي حالياً على روابط تيك توك أو جرب رابط تيك توك"
-          " آخر.",
-          message.chat.id,
-          processing_msg.message_id,
+      # إرسال الفيديو بدون علامة مائية
+      bot.send_video(
+          message.chat.id, video_url, caption="✅ تم التحميل بنجاح 🎯"
       )
+
+      # حذف رسالة الانتظار
+      bot.delete_message(message.chat.id, processing_msg.message_id)
+    else:
+      raise Exception("فشل التحميل من الـ API")
 
   except Exception as e:
     bot.edit_message_text(
-        "❌ حدث خطأ أثناء التحميل. تأكد أن الرابط صحيح.",
+        "❌ عذراً، لم أتمكن من تحميل هذا الرابط. جرب رابطاً آخر.",
         message.chat.id,
         processing_msg.message_id,
     )
