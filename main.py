@@ -18,9 +18,7 @@ def run_web():
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
 
-# دالة المنبه الذاتي لتشغيل البوت 24 ساعة بدون انقطاع
 def self_ping():
-    # استبدل رابط موقعك على Render هنا لاحقاً، أو سيقوم بعمل بينغ تلقائي
     app_url = os.environ.get("RENDER_EXTERNAL_URL", "http://localhost:10000")
     while True:
         try:
@@ -28,7 +26,6 @@ def self_ping():
                 requests.get(app_url, timeout=10)
         except Exception:
             pass
-        # يرسل طلب لنفسه كل 4 دقائق عشان ما ينام السيرفر أبداً
         time.sleep(240)
 
 def keep_alive():
@@ -58,10 +55,35 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     text = update.message.text.strip()
     
-    # 1. تحميل فيديوهات تيك توك أو إنستغرام عبر yt-dlp
-    if "tiktok.com" in text or "vt.tiktok.com" in text or "vm.tiktok.com" in text or "instagram.com" in text or "instagr.am" in text:
-        platform_name = "تيك توك" if "tiktok" in text or "vt." in text or "vm." in text else "إنستغرام"
-        processing_msg = await update.message.reply_text(f"⚡️ جاري سحب فيديو {platform_name} بأعلى جودة أصلية...")
+    # 1. تحميل فيديوهات تيك توك عبر API مباشر ومستقر 100%
+    if "tiktok.com" in text or "vt.tiktok.com" in text or "vm.tiktok.com" in text:
+        processing_msg = await update.message.reply_text("⚡️ جاري تحميل فيديو تيك توك بأعلى جودة...")
+        try:
+            target_url = text.split("?")[0]
+            api_url = f"https://www.tikwm.com/api/?url={target_url}&hd=1"
+            res = requests.get(api_url, timeout=15).json()
+
+            if res.get("code") == 0 and "data" in res:
+                video_data = res["data"]
+                hd_play = video_data.get("hdplay") or video_data.get("play")
+                title = video_data.get("title", "فيديو تيك توك")
+                
+                await processing_msg.delete()
+                await update.message.reply_video(
+                    video=hd_play,
+                    caption=f"🎥 **تم تحميل تيك توك بنجاح يا وحش!** 🚀\n\n📝 {title}",
+                    supports_streaming=True
+                )
+            else:
+                await processing_msg.edit_text("❌ لم أستطع تحميل فيديو تيك توك، تأكد من صحة الرابط.")
+        except Exception as e:
+            logger.error(f"TikTok Error: {e}")
+            await processing_msg.edit_text("❌ حدث خطأ أثناء تحميل تيك توك.")
+        return
+
+    # 2. تحميل فيديوهات إنستغرام عبر yt-dlp القوي والمضمون
+    if "instagram.com" in text or "instagr.am" in text:
+        processing_msg = await update.message.reply_text("⚡️ جاري سحب فيديو إنستغرام بأعلى جودة أصلية...")
         try:
             clean_url = text.split("?")[0]
             ydl_opts = {
@@ -79,17 +101,17 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 await processing_msg.delete()
                 await update.message.reply_video(
                     video=video_url,
-                    caption=f"🎥 **تم تحميل فيديو {platform_name} بنجاح يا بطل!** 🚀",
+                    caption="🎥 **تم تحميل فيديو إنستغرام بنجاح يا بطل!** 🚀",
                     supports_streaming=True
                 )
             else:
-                await processing_msg.edit_text(f"❌ عذراً، لم أستطع استخراج الفيديو. تأكد أن الرابط صحيح وعام.")
+                await processing_msg.edit_text("❌ عذراً، لم أستطع استخراج الفيديو. تأكد أن الحساب عام.")
         except Exception as e:
-            logger.error(f"Download Error: {e}")
-            await processing_msg.edit_text(f"❌ حدث خطأ أثناء التحميل، تأكد أن الرابط صحيح.")
+            logger.error(f"IG Error: {e}")
+            await processing_msg.edit_text("❌ حدث خطأ أثناء تحميل إنستغرام.")
         return
 
-    # 2. جلب معلومات حسابات تيك توك
+    # 3. جلب معلومات حسابات تيك توك
     if not " " in text and len(text) < 30 and not text.startswith("السلام") and not text.startswith("هلا"):
         processing_msg = await update.message.reply_text("⚡️ جاري سحب الأفاتار والبيانات...")
         try:
@@ -161,4 +183,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-            
+    
