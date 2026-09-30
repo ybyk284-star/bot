@@ -1,6 +1,8 @@
 import os
 import logging
 import time
+import re
+import json
 import requests
 from threading import Thread
 from flask import Flask
@@ -55,22 +57,71 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     text = update.message.text.strip()
     
-    # تحميل فيديوهات تيك توك وإنستغرام عبر yt_dlp القوي
-    if "tiktok.com" in text or "vt.tiktok.com" in text or "vm.tiktok.com" in text or "instagram.com" in text or "instagr.am" in text:
-        platform_name = "تيك توك" if "tiktok" in text or "vt." in text or "vm." in text else "إنستغرام"
-        processing_msg = await update.message.reply_text(f"⚡️ جاري سحب فيديو {platform_name} بأعلى جودة أصلية...")
+    # 1. تحميل فيديوهات تيك توك بطريقة الـ Scraping المباشرة (بدون حظر)
+    if "tiktok.com" in text or "vt.tiktok.com" in text or "vm.tiktok.com" in text:
+        processing_msg = await update.message.reply_text("⚡️ جاري سحب فيديو تيك توك بالطريقة المباشرة...")
+        try:
+            # توسيع الرابط المختصر أولاً
+            expanded_url = text
+            if "vt.tiktok.com" in text or "vm.tiktok.com" in text:
+                res_head = requests.head(text, allow_redirects=True, timeout=10)
+                expanded_url = res_head.url.split("?")[0]
+            else:
+                expanded_url = text.split("?")[0]
+
+            video_url = None
+            video_title = "🎥 تم تحميل فيديو تيك توك بنجاح يا بطل! 🚀"
+
+            # محاولة السحب عبر سحب الصفحة واستخراج رابط الفيديو من البيانات المخفية
+            headers = {
+                "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1",
+                "Accept-Language": "ar-SA,ar;q=0.9,en-US;q=0.8,en;q=0.7"
+            }
+            
+            page_res = requests.get(expanded_url, headers=headers, timeout=15)
+            if page_res.status_code == 200:
+                html_content = page_res.text
+                # البحث عن رابط الفيديو داخل كود الصفحة
+                match = re.search(r'"playAddr"\s*:\s*"([^"]+)"', html_content)
+                if match:
+                    video_url = match.group(1).encode().decode('unicode-escape')
+                else:
+                    # محاولة بحث ثانية بنمط مختلف
+                    match2 = re.search(r'https://v\d+\.tiktokcdn\.com/[^"]+', html_content)
+                    if match2:
+                        video_url = match2.group(0)
+
+            # لو ما ضبطت، نجرب سرفراً بديلاً مجانياً عبر API سريع وخفيف
+            if not video_url:
+                api_fallback = f"https://tikwm.com/api/?url={expanded_url}&hd=1"
+                fb_res = requests.get(api_fallback, timeout=10).json()
+                if fb_res.get("code") == 0 and "data" in fb_res:
+                    video_url = fb_res["data"].get("hdplay") or fb_res["data"].get("play")
+                    video_title = fb_res["data"].get("title", "🎥 تم تحميل فيديو تيك توك بنجاح!")
+
+            if video_url:
+                await processing_msg.delete()
+                await update.message.reply_video(
+                    video=video_url,
+                    caption=f"🎥 **{video_title}**",
+                    supports_streaming=True
+                )
+            else:
+                await processing_msg.edit_text("❌ عذراً، تيك توك يحظر هذا الرابط مؤقتاً. جرب رابط فيديو آخر.")
+        except Exception as e:
+            logger.error(f"TikTok Scraping Error: {e}")
+            await processing_msg.edit_text("❌ حدث خطأ أثناء التحميل، تأكد أن الرابط صحيح وعام.")
+        return
+
+    # 2. تحميل فيديوهات إنستغرام عبر yt-dlp
+    if "instagram.com" in text or "instagr.am" in text:
+        processing_msg = await update.message.reply_text("⚡️ جاري سحب فيديو إنستغرام بأعلى جودة أصلية...")
         try:
             clean_url = text.split("?")[0]
-            
             ydl_opts = {
                 'format': 'best',
                 'quiet': True,
                 'no_warnings': True,
-                'extractor_args': {'tiktok': {'web_app': True}},
-                'http_headers': {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-                    'Accept-Language': 'en-US,en;q=0.9',
-                }
             }
             
             video_url = ""
@@ -82,17 +133,17 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 await processing_msg.delete()
                 await update.message.reply_video(
                     video=video_url,
-                    caption=f"🎥 **تم تحميل فيديو {platform_name} بنجاح يا بطل!** 🚀",
+                    caption="🎥 **تم تحميل فيديو إنستغرام بنجاح يا بطل!** 🚀",
                     supports_streaming=True
                 )
             else:
-                await processing_msg.edit_text(f"❌ عذراً، لم أستطع استخراج الفيديو. تأكد أن الرابط صحيح وعام.")
+                await processing_msg.edit_text("❌ حدث خطأ أثناء تحميل إنستغرام.")
         except Exception as e:
-            logger.error(f"Download Error: {e}")
-            await processing_msg.edit_text(f"❌ حدث خطأ أثناء التحميل، تأكد أن الرابط صحيح وعام.")
+            logger.error(f"IG Error: {e}")
+            await processing_msg.edit_text("❌ حدث خطأ أثناء تحميل إنستغرام.")
         return
 
-    # جلب معلومات حسابات تيك توك
+    # 3. جلب معلومات حسابات تيك توك
     if not " " in text and len(text) < 30 and not text.startswith("السلام") and not text.startswith("هلا"):
         processing_msg = await update.message.reply_text("⚡️ جاري سحب الأفاتار والبيانات...")
         try:
@@ -164,4 +215,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-        
