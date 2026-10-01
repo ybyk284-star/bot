@@ -8,6 +8,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# توكن البوت الخاص بك
 TOKEN = '8266423475:AAHG4Im-8XKwmcT8NEHv8dQyHgJVvNx_t_g'
 SECRET_PASSWORD = "123" 
 authenticated_users = set()
@@ -56,7 +57,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         return
 
     if text == "عرض صوري السرية 📂":
-        await update.message.reply_text("📂 كل صورة ترسلها للبوت أثناء فتح الخزنة يتم حفظها هنا بشكل سري ومحمي تماماً. أرسل الصور التي تريد حفظها الآن!")
+        await update.message.reply_text("📂 كل صورة ترسلها للبوت أثناء فتح الخزنة يتم حفظها هنا بشكل سري ومحمي تماماً. أرسل الصور تريد حفظها الآن!")
         return
 
     if photo:
